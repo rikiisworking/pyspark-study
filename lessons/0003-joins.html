@@ -1,0 +1,259 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>0003 · joins</title>
+  <link rel="stylesheet" href="../assets/styles.css" />
+</head>
+<body>
+  <div class="wrap">
+    <nav class="crumbs">
+      <a href="0002-withcolumn-rename.html">← 0002</a> ·
+      <a href="../reference/dataframe-core-syntax.html">Reference</a> ·
+      <a href="../exercises/03_joins.py">Exercises</a>
+    </nav>
+    <header>
+      <p class="eyebrow">Lesson 0003 · DataFrame API</p>
+      <h1>Joins</h1>
+      <p class="lede">Glue two frames on a key. Most pipeline “enrich fact with dimension” work is this file’s syntax.</p>
+    </header>
+
+    <div class="win">
+      <strong>Win:</strong> Cold-write <code>left.join(right, on, how)</code> for inner/left/right/full/semi/anti, then project clean columns without ambiguous key errors.
+    </div>
+
+    <h2>0. Map: knowledge → exercise</h2>
+    <pre><code>ex1  join(..., "cust_id", "inner") + select
+ex2  how="left"
+ex3  how="right"
+ex4  how="full" (or "outer")
+ex5  how="left_semi"   — filter left by existence
+ex6  how="left_anti"   — left rows with no match
+ex7  join then filter
+ex8  on = Column equality + alias + select</code></pre>
+
+    <h2>1. Toy data (same as drills)</h2>
+    <pre><code>orders
+  order_id | cust_id | amount
+         1 |      10 |    100
+         2 |      20 |    200
+         3 |      10 |     50
+         4 |      99 |     80   ← no customer
+
+customers
+  cust_id | name  | region
+       10 | Alice | east
+       20 | Bob   | west
+       30 | Carol | east      ← no orders</code></pre>
+
+    <h2>2. Signature</h2>
+    <p>
+      <a href="https://spark.apache.org/docs/latest/api/python/reference/pyspark.sql/api/pyspark.sql.DataFrame.join.html"><code>left.join(right, on=None, how=None)</code></a>
+    </p>
+    <ul>
+      <li><code>on</code> — key string, list of key strings, or a boolean <code>Column</code> (or list of Columns).</li>
+      <li><code>how</code> — default <code>"inner"</code>. Also <code>left</code>/<code>left_outer</code>, <code>right</code>/<code>right_outer</code>, <code>full</code>/<code>outer</code>, <code>left_semi</code>, <code>left_anti</code>, <code>cross</code>, …</li>
+    </ul>
+    <pre><code>orders.join(customers, "cust_id", "inner")
+orders.join(customers, ["cust_id"], "left")
+orders.join(customers, orders.cust_id == customers.cust_id, "inner")</code></pre>
+
+    <h2>3. String key vs Column condition (critical)</h2>
+    <h3>A. Shared name as string — equi-join, one key column</h3>
+    <pre><code>orders.join(customers, "cust_id", "inner")
+# output has ONE cust_id, plus other cols from both sides</code></pre>
+    <p>Use this when both frames share the same key column name. Drills <strong>ex1–ex7</strong> use this style.</p>
+
+    <h3>B. Column equality — both key columns kept</h3>
+    <pre><code>orders.join(customers, orders.cust_id == customers.cust_id, "inner")
+# two cust_id columns → ambiguous if you select("cust_id")</code></pre>
+    <p>
+      Fix with <a href="https://spark.apache.org/docs/latest/api/python/reference/pyspark.sql/api/pyspark.sql.DataFrame.alias.html">aliases</a>
+      and qualified selects (<strong>ex8</strong>):
+    </p>
+    <pre><code>o = orders.alias("o")
+c = customers.alias("c")
+(
+    o.join(c, col("o.cust_id") == col("c.cust_id"), "inner")
+     .select(
+         col("o.order_id").alias("order_id"),
+         col("c.name").alias("name"),
+         col("o.amount").alias("amount"),
+     )
+)</code></pre>
+
+    <h2>4. Join types (what rows survive)</h2>
+    <table style="width:100%; font-family: var(--sans); font-size: 0.9rem; border-collapse: collapse;">
+      <thead>
+        <tr style="text-align:left; border-bottom: 1px solid var(--line);">
+          <th style="padding:0.35rem 0.4rem;">how</th>
+          <th style="padding:0.35rem 0.4rem;">Keeps</th>
+          <th style="padding:0.35rem 0.4rem;">Drill</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr style="border-bottom: 1px solid var(--line);">
+          <td style="padding:0.35rem 0.4rem;"><code>inner</code></td>
+          <td style="padding:0.35rem 0.4rem;">matches only</td>
+          <td style="padding:0.35rem 0.4rem;">ex1</td>
+        </tr>
+        <tr style="border-bottom: 1px solid var(--line);">
+          <td style="padding:0.35rem 0.4rem;"><code>left</code></td>
+          <td style="padding:0.35rem 0.4rem;">all left; right null if miss</td>
+          <td style="padding:0.35rem 0.4rem;">ex2</td>
+        </tr>
+        <tr style="border-bottom: 1px solid var(--line);">
+          <td style="padding:0.35rem 0.4rem;"><code>right</code></td>
+          <td style="padding:0.35rem 0.4rem;">all right; left null if miss</td>
+          <td style="padding:0.35rem 0.4rem;">ex3</td>
+        </tr>
+        <tr style="border-bottom: 1px solid var(--line);">
+          <td style="padding:0.35rem 0.4rem;"><code>full</code> / <code>outer</code></td>
+          <td style="padding:0.35rem 0.4rem;">both sides; nulls either way</td>
+          <td style="padding:0.35rem 0.4rem;">ex4</td>
+        </tr>
+        <tr style="border-bottom: 1px solid var(--line);">
+          <td style="padding:0.35rem 0.4rem;"><code>left_semi</code></td>
+          <td style="padding:0.35rem 0.4rem;">left rows that match; <strong>left cols only</strong></td>
+          <td style="padding:0.35rem 0.4rem;">ex5</td>
+        </tr>
+        <tr>
+          <td style="padding:0.35rem 0.4rem;"><code>left_anti</code></td>
+          <td style="padding:0.35rem 0.4rem;">left rows with <strong>no</strong> match; left cols only</td>
+          <td style="padding:0.35rem 0.4rem;">ex6</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <h3>Inner (ex1)</h3>
+    <pre><code>orders.join(customers, "cust_id", "inner").select(
+    "order_id", "name", "amount"
+)
+# → (1, Alice, 100), (2, Bob, 200), (3, Alice, 50)
+# order 4 dropped; Carol never appears</code></pre>
+
+    <h3>Left (ex2)</h3>
+    <pre><code>orders.join(customers, "cust_id", "left").select(
+    "order_id", "name", "amount"
+)
+# order 4 kept with name = null</code></pre>
+    <p><code>"left"</code>, <code>"left_outer"</code>, <code>"leftouter"</code> are the same family (official aliases).</p>
+
+    <h3>Right (ex3)</h3>
+    <pre><code>orders.join(customers, "cust_id", "right").select("name", "order_id")
+# Carol kept with order_id = null
+# Alice appears twice (two orders)</code></pre>
+
+    <h3>Full outer (ex4)</h3>
+    <pre><code>orders.join(customers, "cust_id", "full").select("order_id", "name")
+# orphan order 4 AND orphan Carol both present</code></pre>
+
+    <h3>Semi / anti (ex5, ex6)</h3>
+    <p>Existence filters — result columns come from the <strong>left</strong> frame only.</p>
+    <pre><code># orders that have a customer (ex5)
+orders.join(customers, "cust_id", "left_semi").select(
+    "order_id", "cust_id", "amount"
+)
+
+# orders with no customer (ex6)
+orders.join(customers, "cust_id", "left_anti").select(
+    "order_id", "cust_id", "amount"
+)
+# note: after key join, column order may put cust_id first —
+# always select() when the checker (or your contract) cares about order</code></pre>
+
+    <h2>5. Join then filter (ex7)</h2>
+    <pre><code>(
+    orders.join(customers, "cust_id", "inner")
+          .filter(col("region") == "east")
+          .select("order_id", "name", "region", "amount")
+)
+# Alice's two orders only (Bob west dropped)</code></pre>
+    <p>Filter after join uses columns from either side (once joined, one flat schema for string-key joins).</p>
+
+    <h2>6. Imports for drills</h2>
+    <pre><code>from pyspark.sql.functions import col</code></pre>
+
+    <h2>7. Work mental model</h2>
+    <ul>
+      <li>Fact left, dimension right, <code>left</code> join → keep all facts.</li>
+      <li>Need “exists in other table?” without bringing columns → <code>left_semi</code>.</li>
+      <li>Need “missing dimension?” → <code>left_anti</code>.</li>
+      <li>Duplicate key column names after Column-join → alias + qualified <code>select</code>.</li>
+    </ul>
+
+    <h2>8. Retrieval</h2>
+    <div id="q1"></div>
+    <div id="q2"></div>
+    <div id="q3"></div>
+
+    <h2>9. Cold write</h2>
+    <div id="drill1"></div>
+
+    <h2>10. Run real Python</h2>
+    <p>Sections 2–6 are the full solution kit for all 8 drills.</p>
+    <pre><code>cd exercises
+../.venv/bin/python 03_joins.py</code></pre>
+    <p>
+      File: <code>exercises/03_joins.py</code> ·
+      Peek after try: <code>exercises/solutions/03_joins.py</code>
+    </p>
+
+    <div class="source">
+      <strong>Primary source:</strong>
+      <a href="https://spark.apache.org/docs/latest/api/python/reference/pyspark.sql/api/pyspark.sql.DataFrame.join.html">DataFrame.join</a>
+      (examples cover inner/outer/semi/anti and ambiguous columns).
+    </div>
+
+    <div class="ask">
+      FAIL on columns? Usually wrong <code>how</code> or forgot <code>select</code> column list. Paste FAIL block here.
+    </div>
+
+    <footer>
+      Prev: <a href="0002-withcolumn-rename.html">0002</a>
+      · Next when green: <strong>groupBy + agg</strong> (0004, last core mission piece)
+      · Ref: <a href="../reference/dataframe-core-syntax.html">dataframe-core-syntax</a>
+    </footer>
+  </div>
+  <script src="../assets/quiz.js"></script>
+  <script>
+    LessonUI.Quiz.mount("#q1", {
+      prompt: "orders.join(customers, \"cust_id\", \"left_anti\") returns…",
+      options: [
+        { text: "Left rows with no match; left columns only", correct: true, why: "anti = non-matches; semi/anti never pull right columns." },
+        { text: "Right rows with no match; right columns only", correct: false, why: "Left anti is driven from the left frame." },
+        { text: "All rows from both; null-filled keys", correct: false, why: "That is full outer." },
+        { text: "Matches only; columns from both sides", correct: false, why: "That is inner join." },
+      ],
+    });
+    LessonUI.Quiz.mount("#q2", {
+      prompt: "String key \"cust_id\" vs Column orders.cust_id == customers.cust_id?",
+      options: [
+        { text: "String merges one key; Column keeps two keys", correct: true, why: "Official docs: name-based equi-join coalesces the key; expression join keeps both." },
+        { text: "Both always drop the key column entirely", correct: false, why: "Keys remain; form differs." },
+        { text: "Column form only works for left_semi joins", correct: false, why: "Column on works for all how types." },
+        { text: "String form is SQL-only; Column is RDD-only", correct: false, why: "Both are DataFrame API." },
+      ],
+    });
+    LessonUI.Quiz.mount("#q3", {
+      prompt: "Keep every order; null name if no customer. Which how?",
+      options: [
+        { text: 'how="left"  (orders on the left)', correct: true, why: "Left join preserves left rows." },
+        { text: 'how="inner"', correct: false, why: "Drops unmatched orders." },
+        { text: 'how="left_semi"', correct: false, why: "Drops non-matches; no right cols either." },
+        { text: 'how="right"', correct: false, why: "Preserves customers, not all orders." },
+      ],
+    });
+    LessonUI.Drill.mount("#drill1", {
+      prompt: "Inner join on cust_id; select order_id, name, amount",
+      accept: [
+        'orders.join(customers, "cust_id", "inner").select("order_id", "name", "amount")',
+        'orders.join(customers, "cust_id").select("order_id", "name", "amount")',
+        "orders.join(customers, 'cust_id', 'inner').select('order_id', 'name', 'amount')",
+      ],
+      solution: 'orders.join(customers, "cust_id", "inner").select("order_id", "name", "amount")',
+    });
+  </script>
+</body>
+</html>

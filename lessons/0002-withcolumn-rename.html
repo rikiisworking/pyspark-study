@@ -1,0 +1,233 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>0002 · withColumn + reshape</title>
+  <link rel="stylesheet" href="../assets/styles.css" />
+</head>
+<body>
+  <div class="wrap">
+    <nav class="crumbs">
+      <a href="0001-filter-select-cold.html">← 0001</a> ·
+      <a href="../reference/dataframe-core-syntax.html">Reference</a> ·
+      <a href="../exercises/02_withcolumn.py">Exercises</a>
+    </nav>
+    <header>
+      <p class="eyebrow">Lesson 0002 · DataFrame API</p>
+      <h1>withColumn + reshape</h1>
+      <p class="lede">Change the column set: add, overwrite, rename, drop, cast, branch. Same muscle as pipeline “enrich then project” at work.</p>
+    </header>
+
+    <div class="win">
+      <strong>Win:</strong> From blank, add a derived column with <code>withColumn</code>, rename with <code>withColumnRenamed</code>, and build a simple <code>when</code>/<code>otherwise</code> flag — then pass all 8 drills.
+    </div>
+
+    <h2>0. Map: knowledge → exercise</h2>
+    <p>Everything below is enough to solve <code>exercises/02_withcolumn.py</code>. No extra APIs required.</p>
+    <pre><code>ex1  withColumn — new name
+ex2  withColumn — same name (overwrite)
+ex3  withColumnRenamed
+ex4  drop
+ex5  cast + alias (or withColumn + cast)
+ex6  lit + alias / withColumn
+ex7  when(...).otherwise(...)
+ex8  filter + withColumn + select (chain)</code></pre>
+
+    <h2>1. Imports you need for the drills</h2>
+    <pre><code>from pyspark.sql.functions import col, lit, when</code></pre>
+
+    <h2>2. <code>withColumn</code> — add or replace</h2>
+    <p>
+      <a href="https://spark.apache.org/docs/latest/api/python/reference/pyspark.sql/api/pyspark.sql.DataFrame.withColumn.html"><code>df.withColumn(name, column_expr)</code></a>
+      returns a <em>new</em> DataFrame.
+    </p>
+    <ul>
+      <li>If <code>name</code> is <strong>new</strong> → column appended (usually last).</li>
+      <li>If <code>name</code> <strong>already exists</strong> → that column is <strong>replaced</strong>; other columns stay.</li>
+    </ul>
+    <pre><code># NEW column amount2 (ex1)
+df.withColumn("amount2", col("amount") * 2)
+
+# REPLACE amount in place (ex2)
+df.withColumn("amount", col("amount") + 10)</code></pre>
+    <p>
+      Official note: many chained <code>withColumn</code> calls build a fat plan; for lots of new columns prefer one
+      <code>select(...)</code>. For these drills, single <code>withColumn</code> is fine.
+    </p>
+
+    <h2>3. <code>withColumnRenamed</code> — rename only</h2>
+    <p>
+      <a href="https://spark.apache.org/docs/latest/api/python/reference/pyspark.sql/api/pyspark.sql.DataFrame.withColumnRenamed.html"><code>df.withColumnRenamed(old, new)</code></a>
+      renames; does not change values or drop other columns.
+    </p>
+    <pre><code># amount → spend (ex3)
+df.withColumnRenamed("amount", "spend")
+# columns become: id, region, spend, status</code></pre>
+    <p>
+      Diff from lesson 0001: <code>col("amount").alias("spend")</code> inside <code>select</code> <em>projects</em>
+      (you list what to keep). <code>withColumnRenamed</code> keeps the full frame, just renames one field.
+    </p>
+
+    <h2>4. <code>drop</code> — remove columns</h2>
+    <p>
+      <a href="https://spark.apache.org/docs/latest/api/python/reference/pyspark.sql/api/pyspark.sql.DataFrame.drop.html"><code>df.drop("status")</code></a>
+      removes one or more columns by name.
+    </p>
+    <pre><code># drop status (ex4)
+df.drop("status")
+# remaining: id, region, amount</code></pre>
+
+    <h2>5. <code>cast</code> — change type</h2>
+    <p>
+      <a href="https://spark.apache.org/docs/latest/api/python/reference/pyspark.sql/api/pyspark.sql.Column.cast.html"><code>col("amount").cast("double")</code></a>
+      returns a Column of the new type. String type names like <code>"double"</code>, <code>"int"</code>, <code>"string"</code> work.
+    </p>
+    <pre><code># amount_d as double (ex5) — select form
+df.select(
+    "id",
+    "amount",
+    col("amount").cast("double").alias("amount_d"),
+)
+
+# same idea via withColumn then select
+df.withColumn("amount_d", col("amount").cast("double")).select(
+    "id", "amount", "amount_d"
+)</code></pre>
+
+    <h2>6. <code>lit</code> — constant on every row</h2>
+    <p>
+      Python values are not Columns. Wrap constants with
+      <a href="https://spark.apache.org/docs/latest/api/python/reference/pyspark.sql/api/pyspark.sql.functions.lit.html"><code>lit(...)</code></a>.
+    </p>
+    <pre><code># version = "v1" for every row (ex6)
+df.select("id", lit("v1").alias("version"))
+
+# or
+df.withColumn("version", lit("v1")).select("id", "version")</code></pre>
+
+    <h2>7. <code>when</code> / <code>otherwise</code> — if/else column</h2>
+    <p>
+      <a href="https://spark.apache.org/docs/latest/api/python/reference/pyspark.sql/api/pyspark.sql.functions.when.html"><code>when(condition, value)</code></a>
+      + <code>.otherwise(value)</code>. Without <code>otherwise</code>, unmatched rows are null.
+    </p>
+    <pre><code># band high/low (ex7)
+df.select(
+    "id",
+    "amount",
+    when(col("amount") &gt; 100, "high").otherwise("low").alias("band"),
+)
+
+# withColumn form also fine:
+df.withColumn(
+    "band",
+    when(col("amount") &gt; 100, "high").otherwise("low"),
+).select("id", "amount", "band")</code></pre>
+    <p>Chain more branches: <code>when(...).when(...).otherwise(...)</code>.</p>
+
+    <h2>8. Chain for pipelines (ex8)</h2>
+    <p>Same as work code: filter rows → enrich column → project.</p>
+    <pre><code># east only, tax = amount * 0.1, project id/amount/tax
+(
+    df.filter(col("region") == "east")
+      .withColumn("tax", col("amount") * 0.1)
+      .select("id", "amount", "tax")
+)</code></pre>
+    <p>
+      <code>amount * 0.1</code> yields floating values (e.g. <code>5.0</code>). That is what the checker expects for <code>tax</code>.
+    </p>
+
+    <h2>9. Full toy session (read once, then close)</h2>
+    <pre><code>from pyspark.sql import SparkSession
+from pyspark.sql.functions import col, lit, when
+
+spark = SparkSession.builder.getOrCreate()
+df = spark.createDataFrame(
+    [(1, "east", 50, "active"), (2, "west", 200, "closed")],
+    "id INT, region STRING, amount INT, status STRING",
+)
+
+df.withColumn("amount2", col("amount") * 2).show()
+df.withColumnRenamed("amount", "spend").show()
+df.drop("status").show()
+df.select("id", lit("v1").alias("version")).show()
+df.select(
+    "id",
+    when(col("amount") &gt; 100, "high").otherwise("low").alias("band"),
+).show()</code></pre>
+
+    <h2>10. Retrieval</h2>
+    <div id="q1"></div>
+    <div id="q2"></div>
+    <div id="q3"></div>
+
+    <h2>11. Cold write</h2>
+    <div id="drill1"></div>
+
+    <h2>12. Run real Python</h2>
+    <p>Eight graded drills. Lesson sections 2–8 are the solution kit — open this page while coding if needed, then retry blind.</p>
+    <pre><code>cd exercises
+../.venv/bin/python 02_withcolumn.py</code></pre>
+    <p>
+      File: <code>exercises/02_withcolumn.py</code> ·
+      Peek after try: <code>exercises/solutions/02_withcolumn.py</code>
+    </p>
+
+    <div class="source">
+      <strong>Primary source:</strong>
+      <a href="https://spark.apache.org/docs/latest/api/python/reference/pyspark.sql/api/pyspark.sql.DataFrame.withColumn.html">DataFrame.withColumn</a>
+      · also
+      <a href="https://spark.apache.org/docs/latest/api/python/getting_started/quickstart_df.html">Quickstart: DataFrame</a>
+    </div>
+
+    <div class="ask">
+      Stuck on a FAIL line? Paste the FAIL block here. Teacher helps.
+    </div>
+
+    <footer>
+      Prev: <a href="0001-filter-select-cold.html">0001 filter + select</a>
+      · Ref: <a href="../reference/dataframe-core-syntax.html">dataframe-core-syntax</a>
+      · Next: <a href="0003-joins.html">0003 joins</a>
+    </footer>
+  </div>
+  <script src="../assets/quiz.js"></script>
+  <script>
+    LessonUI.Quiz.mount("#q1", {
+      prompt: "Add column amount2 = amount * 2, keep other columns. Which call?",
+      options: [
+        { text: 'df.withColumn("amount2", col("amount") * 2)', correct: true, why: "withColumn adds (or replaces) by name; expression is a Column." },
+        { text: 'df.select("amount2", col("amount") * 2)', correct: false, why: "select projects; this drops other columns and mis-names." },
+        { text: 'df.withColumnRenamed("amount", "amount2")', correct: false, why: "rename only — values stay, no * 2." },
+        { text: 'df.drop("amount2", col("amount") * 2)', correct: false, why: "drop removes columns; does not add expressions." },
+      ],
+    });
+    LessonUI.Quiz.mount("#q2", {
+      prompt: "withColumn(\"amount\", col(\"amount\") + 10) does what?",
+      options: [
+        { text: "Overwrites amount; other columns stay put", correct: true, why: "Same name → replace that column only." },
+        { text: "Adds amount_10; leaves amount unchanged now", correct: false, why: "Name is amount, so it replaces." },
+        { text: "Renames amount to amount_plus_ten only", correct: false, why: "That is withColumnRenamed territory." },
+        { text: "Filters rows where amount increases by 10", correct: false, why: "withColumn does not filter rows." },
+      ],
+    });
+    LessonUI.Quiz.mount("#q3", {
+      prompt: "Flag high if amount > 100 else low. Correct expression?",
+      options: [
+        { text: 'when(col("amount") > 100, "high").otherwise("low")', correct: true, why: "when + otherwise builds the branch Column; alias/withColumn attaches name." },
+        { text: 'if col("amount") > 100 then "high" else "low"', correct: false, why: "Python if does not build Spark Column expressions." },
+        { text: 'col("amount").between("high", "low")', correct: false, why: "between is for range on values, not labels." },
+        { text: 'lit("high").filter(col("amount") > 100)', correct: false, why: "lit is constant; filter is a DataFrame method." },
+      ],
+    });
+    LessonUI.Drill.mount("#drill1", {
+      prompt: "east rows only; tax = amount * 0.1; columns id, amount, tax",
+      accept: [
+        'df.filter(col("region") == "east").withColumn("tax", col("amount") * 0.1).select("id", "amount", "tax")',
+        "df.filter(col('region') == 'east').withColumn('tax', col('amount') * 0.1).select('id', 'amount', 'tax')",
+        'df.where(col("region") == "east").withColumn("tax", col("amount") * 0.1).select("id", "amount", "tax")',
+      ],
+      solution: 'df.filter(col("region") == "east").withColumn("tax", col("amount") * 0.1).select("id", "amount", "tax")',
+    });
+  </script>
+</body>
+</html>

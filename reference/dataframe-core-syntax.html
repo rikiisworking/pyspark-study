@@ -1,0 +1,108 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Reference · DataFrame core syntax</title>
+  <link rel="stylesheet" href="../assets/styles.css" />
+</head>
+<body>
+  <div class="wrap">
+    <nav class="crumbs">
+      <a href="../MISSION.md">Mission</a> ·
+      <a href="../lessons/0001-filter-select-cold.html">0001</a> ·
+      <a href="../lessons/0002-withcolumn-rename.html">0002</a> ·
+      <a href="../lessons/0003-joins.html">0003</a>
+    </nav>
+    <header>
+      <p class="eyebrow">Reference · print-friendly</p>
+      <h1>DataFrame core syntax</h1>
+      <p class="lede">Compressed patterns for cold recall. Expand only as lessons land.</p>
+    </header>
+
+    <h2>Session + toy frame</h2>
+    <pre><code>from pyspark.sql import SparkSession
+from pyspark.sql.functions import col
+
+spark = SparkSession.builder.getOrCreate()
+df = spark.createDataFrame(data, schema)  # list/RDD/pandas/…</code></pre>
+    <p>
+      Docs:
+      <a href="https://spark.apache.org/docs/latest/api/python/reference/pyspark.sql/api/pyspark.sql.SparkSession.createDataFrame.html">createDataFrame</a>
+    </p>
+
+    <h2>Project columns — <code>select</code></h2>
+    <pre><code>df.select("a", "b")
+df.select(col("a"), col("b") * 2)
+df.select(df.a, df.b)           # attribute form
+df.selectExpr("a", "b * 2 as b2")  # SQL fragments</code></pre>
+    <p><a href="https://spark.apache.org/docs/latest/api/python/reference/pyspark.sql/api/pyspark.sql.DataFrame.select.html">select API</a></p>
+
+    <h2>Keep rows — <code>filter</code> / <code>where</code></h2>
+    <pre><code>df.filter(col("a") &gt; 1)
+df.where(col("a") &gt; 1)          # alias
+df.filter("a &gt; 1")              # SQL string also OK
+df.filter((col("a") &gt; 1) &amp; (col("b") == "x"))  # &amp; | ~  not and/or</code></pre>
+    <p><a href="https://spark.apache.org/docs/latest/api/python/reference/pyspark.sql/api/pyspark.sql.DataFrame.filter.html">filter API</a></p>
+
+    <h2>Column handle — <code>col</code></h2>
+    <pre><code>from pyspark.sql.functions import col
+col("amount")
+col("amount").alias("amt")
+col("amount").cast("double")</code></pre>
+    <p><a href="https://spark.apache.org/docs/latest/api/python/reference/pyspark.sql/api/pyspark.sql.functions.col.html">col API</a></p>
+
+    <h2>Add / replace — <code>withColumn</code></h2>
+    <pre><code>df.withColumn("amount2", col("amount") * 2)   # new col
+df.withColumn("amount", col("amount") + 10)    # overwrite same name</code></pre>
+    <p><a href="https://spark.apache.org/docs/latest/api/python/reference/pyspark.sql/api/pyspark.sql.DataFrame.withColumn.html">withColumn API</a></p>
+
+    <h2>Rename / drop</h2>
+    <pre><code>df.withColumnRenamed("amount", "spend")
+df.drop("status")
+df.drop("a", "b")</code></pre>
+
+    <h2>Constants + branches</h2>
+    <pre><code>from pyspark.sql.functions import lit, when
+lit("v1")
+when(col("amount") &gt; 100, "high").otherwise("low")</code></pre>
+    <p>
+      <a href="https://spark.apache.org/docs/latest/api/python/reference/pyspark.sql/api/pyspark.sql.functions.lit.html">lit</a> ·
+      <a href="https://spark.apache.org/docs/latest/api/python/reference/pyspark.sql/api/pyspark.sql.functions.when.html">when</a>
+    </p>
+
+    <h2>Cast</h2>
+    <pre><code>col("amount").cast("double")
+col("amount").cast("double").alias("amount_d")</code></pre>
+
+    <h2>Lazy rule (one line)</h2>
+    <p>
+      <code>filter</code>/<code>select</code>/<code>withColumn</code> build a plan. Job runs on actions (<code>show</code>, <code>collect</code>, <code>count</code>, write…).
+      See <a href="https://spark.apache.org/docs/latest/api/python/getting_started/quickstart_df.html">quickstart</a>.
+    </p>
+
+    <h2>Join</h2>
+    <pre><code>left.join(right, "key", "inner")
+left.join(right, "key", "left")
+left.join(right, "key", "left_semi")   # left cols, matches only
+left.join(right, "key", "left_anti")   # left cols, non-matches
+left.join(right, left.k == right.k, "inner")  # keeps both key cols
+o.alias("o").join(c.alias("c"), col("o.k") == col("c.k"), "inner")</code></pre>
+    <p><a href="https://spark.apache.org/docs/latest/api/python/reference/pyspark.sql/api/pyspark.sql.DataFrame.join.html">join API</a></p>
+
+    <h2>Pipeline skeleton</h2>
+    <pre><code>out = (
+    orders.join(customers, "cust_id", "left")
+      .filter(col("region") == "east")
+      .select("order_id", "name", "amount")
+)</code></pre>
+
+    <footer>
+      Lessons:
+      <a href="../lessons/0001-filter-select-cold.html">0001</a> ·
+      <a href="../lessons/0002-withcolumn-rename.html">0002</a> ·
+      <a href="../lessons/0003-joins.html">0003</a>
+    </footer>
+  </div>
+</body>
+</html>

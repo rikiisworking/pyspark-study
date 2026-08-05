@@ -1,0 +1,29 @@
+# PySpark Resources
+
+## Knowledge
+
+- [Quickstart: DataFrame — PySpark official](https://spark.apache.org/docs/latest/api/python/getting_started/quickstart_df.html)
+  Short official notebook-style tour of DF API. Use for: first exposure to create/view/select/filter patterns.
+- [Spark SQL, DataFrames and Datasets Guide](https://spark.apache.org/docs/latest/sql-programming-guide.html)
+  Canonical conceptual guide (DF = Dataset of rows with named columns). Use for: untyped vs typed mental model, when API claims need grounding.
+- [PySpark User Guide — Chapter 1: DataFrames](https://spark.apache.org/docs/latest/api/python/user_guide/dataframes.html)
+  Official chapter: create, view, manipulate. Use for: lesson content on day-1 DF ops.
+- [pyspark.sql.DataFrame API reference](https://spark.apache.org/docs/latest/api/python/reference/pyspark.sql/dataframe.html)
+  Method index. Use for: exact signatures when building drills or reference sheets.
+- [DataFrame.filter](https://spark.apache.org/docs/latest/api/python/reference/pyspark.sql/api/pyspark.sql.DataFrame.filter.html) · [DataFrame.select](https://spark.apache.org/docs/latest/api/python/reference/pyspark.sql/api/pyspark.sql.DataFrame.select.html) · [functions.col](https://spark.apache.org/docs/latest/api/python/reference/pyspark.sql/api/pyspark.sql.functions.col.html)
+  Official method docs. Use for: filter/select/col syntax truth.
+- [SparkSession.createDataFrame](https://spark.apache.org/docs/latest/api/python/reference/pyspark.sql/api/pyspark.sql.SparkSession.createDataFrame.html)
+  How toy frames get built for practice. Use for: local drills without real files.
+
+## Wisdom (Communities)
+
+- [Stack Overflow — [pyspark]](https://stackoverflow.com/questions/tagged/pyspark)
+  High volume Q&A; check version tags. Use for: "why does this expression fail" error hunting.
+- [Apache Spark user mailing list](https://lists.apache.org/list.html?user@spark.apache.org)
+  Official user list. Use for: design questions beyond SO snippets.
+- [r/apachespark](https://www.reddit.com/r/apachespark/)
+  Informal peer discussion. Use for: "is this pattern normal at work?" sanity checks.
+
+## Gaps
+
+- No workplace-specific job/style guide yet (naming, when SQL vs DF). Add when user pastes team conventions.

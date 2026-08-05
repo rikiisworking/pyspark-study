@@ -1,0 +1,153 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>0001 · filter + select cold</title>
+  <link rel="stylesheet" href="../assets/styles.css" />
+</head>
+<body>
+  <div class="wrap">
+    <nav class="crumbs">
+      <a href="../MISSION.md">Mission</a> ·
+      <a href="../reference/dataframe-core-syntax.html">Reference: DF core syntax</a>
+    </nav>
+    <header>
+      <p class="eyebrow">Lesson 0001 · DataFrame API</p>
+      <h1>filter + select, cold</h1>
+      <p class="lede">One skill: keep rows, pick columns, type it without looking. This is the spine of almost every pipeline edit at work.</p>
+    </header>
+
+    <div class="win">
+      <strong>Win:</strong> From a blank cell, write a chain that filters then selects — using <code>col</code> — without opening docs.
+    </div>
+
+    <h2>1. Knowledge (keep tiny)</h2>
+    <p>
+      A <a href="https://spark.apache.org/docs/latest/api/python/reference/pyspark.sql/api/pyspark.sql.DataFrame.html">DataFrame</a>
+      is a distributed table of named columns.
+      Transforms return a <em>new</em> DataFrame; they do not mutate the old one.
+    </p>
+    <p>
+      Two ops you type constantly:
+    </p>
+    <ul>
+      <li><a href="https://spark.apache.org/docs/latest/api/python/reference/pyspark.sql/api/pyspark.sql.DataFrame.filter.html"><code>filter(condition)</code></a> — keep rows. <code>where</code> is an alias for the same method.</li>
+      <li><a href="https://spark.apache.org/docs/latest/api/python/reference/pyspark.sql/api/pyspark.sql.DataFrame.select.html"><code>select(*cols)</code></a> — pick / project columns (and expressions).</li>
+    </ul>
+    <p>
+      Column expressions come from <a href="https://spark.apache.org/docs/latest/api/python/reference/pyspark.sql/api/pyspark.sql.functions.col.html"><code>pyspark.sql.functions.col</code></a>.
+      Prefer <code>col("amount") &gt; 100</code> over string SQL for pipeline code you will compose.
+    </p>
+
+    <pre><code>from pyspark.sql import SparkSession
+from pyspark.sql.functions import col
+
+spark = SparkSession.builder.getOrCreate()
+df = spark.createDataFrame(
+    [(1, "a", 50), (2, "b", 200), (3, "a", 150)],
+    "id INT, region STRING, amount INT",
+)
+
+out = (
+    df.filter(col("amount") &gt; 100)
+      .select("id", "region", col("amount"))
+)
+# out rows: (2, b, 200), (3, a, 150)</code></pre>
+
+    <h3>Three ways to name a column (same idea)</h3>
+    <pre><code>df.select("amount")           # string name
+df.select(col("amount"))      # Column object (compose-friendly)
+df.select(df.amount)          # attribute — breaks if name has dots/spaces</code></pre>
+    <p>
+      Pipeline habit: strings for plain picks, <code>col(...)</code> when you compare or build expressions.
+      Official quickstart shows the same create → transform flow:
+      <a href="https://spark.apache.org/docs/latest/api/python/getting_started/quickstart_df.html">Quickstart: DataFrame</a>.
+    </p>
+
+    <h2>2. Retrieval (no peeking)</h2>
+    <p>Cover the code above. Answer from memory.</p>
+
+    <div id="q1"></div>
+    <div id="q2"></div>
+    <div id="q3"></div>
+
+    <h2>3. Cold write</h2>
+    <p>
+      Frame already exists as <code>df</code> with columns <code>id</code>, <code>region</code>, <code>amount</code>.
+      <code>col</code> is imported. Write the full chain only.
+    </p>
+    <div id="drill1"></div>
+
+    <div class="source">
+      <strong>Primary source:</strong>
+      <a href="https://spark.apache.org/docs/latest/api/python/getting_started/quickstart_df.html">PySpark Quickstart: DataFrame</a>
+      — skim “Viewing Data” and filtering/select examples after this lesson.
+    </div>
+
+    <h2>4. Run real Python</h2>
+    <p>
+      Eight graded drills (Spark local). Edit functions, run checker — PASS/FAIL on rows + column order.
+    </p>
+    <pre><code>cd exercises
+../.venv/bin/python 01_filter_select.py</code></pre>
+    <p>
+      File: <code>exercises/01_filter_select.py</code> ·
+      Peek only after try: <code>exercises/solutions/01_filter_select.py</code>
+    </p>
+
+    <div class="ask">
+      Stuck? Ask the agent. Teacher is here — follow-up questions welcome (why string vs col, lazy eval, show vs collect, etc.).
+    </div>
+
+    <footer>
+      Next: <a href="0002-withcolumn-rename.html">0002 withColumn + reshape</a>
+      · Ref: <a href="../reference/dataframe-core-syntax.html">dataframe-core-syntax</a>
+    </footer>
+  </div>
+  <script src="../assets/quiz.js"></script>
+  <script>
+    LessonUI.Quiz.mount("#q1", {
+      prompt: "Which call keeps only rows where amount is greater than 100?",
+      options: [
+        { text: 'df.filter(col("amount") > 100)', correct: true, why: "filter + Column predicate. where(...) is the same method." },
+        { text: 'df.select(col("amount") > 100)', correct: false, why: "select projects columns; a boolean Column becomes a true/false column, not a row filter." },
+        { text: 'df.drop(col("amount") > 100)', correct: false, why: "drop removes columns by name, not rows by predicate." },
+        { text: 'df.limit(col("amount") > 100)', correct: false, why: "limit takes a count of rows, not a condition." },
+      ],
+    });
+    // Equal-ish option length: kept similar character counts for fair MCQ
+    LessonUI.Quiz.mount("#q2", {
+      prompt: "filter vs where — pick the true statement.",
+      options: [
+        { text: "where is an alias of filter; same behavior", correct: true, why: "Official API: where is alias for filter." },
+        { text: "where runs SQL only; filter is Column-only", correct: false, why: "Both accept Column or SQL string condition." },
+        { text: "filter is lazy; where always triggers a job", correct: false, why: "Both are lazy transformations." },
+        { text: "where mutates df; filter always copies data", correct: false, why: "Neither mutates; both return a new logical plan." },
+      ],
+    });
+    LessonUI.Quiz.mount("#q3", {
+      prompt: "You need amount > 100 and only columns id, region. Best chain?",
+      options: [
+        { text: 'df.filter(col("amount") > 100).select("id", "region")', correct: true, why: "Filter rows first (or either order works), then project two columns." },
+        { text: 'df.select("id", "region").groupBy("id")', correct: false, why: "groupBy aggregates; drops the amount filter and changes grain." },
+        { text: 'df.select("id", "region").join(df, "id")', correct: false, why: "join widens; no amount filter expressed." },
+        { text: 'df.orderBy("amount").select("id", "region")', correct: false, why: "orderBy sorts; does not drop low amounts." },
+      ],
+    });
+    LessonUI.Drill.mount("#drill1", {
+      prompt: "Keep amount > 100; select id and region. Use col for the filter.",
+      accept: [
+        'df.filter(col("amount") > 100).select("id", "region")',
+        'df.filter(col("amount") > 100).select("id","region")',
+        'df.where(col("amount") > 100).select("id", "region")',
+        'df.select("id", "region").filter(col("amount") > 100)',
+        'df.select("id", "region").where(col("amount") > 100)',
+        "df.filter(col('amount') > 100).select('id', 'region')",
+        "df.where(col('amount') > 100).select('id', 'region')",
+      ],
+      solution: 'df.filter(col("amount") > 100).select("id", "region")',
+    });
+  </script>
+</body>
+</html>
