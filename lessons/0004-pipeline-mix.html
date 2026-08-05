@@ -1,0 +1,189 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>0004 · pipeline mix (integration)</title>
+  <link rel="stylesheet" href="../assets/styles.css" />
+</head>
+<body>
+  <div class="wrap">
+    <nav class="crumbs">
+      <a href="0003-joins.html">← 0003</a> ·
+      <a href="../reference/dataframe-core-syntax.html">Reference</a> ·
+      <a href="../exercises/04_pipeline_mix.py">Exercises</a>
+    </nav>
+    <header>
+      <p class="eyebrow">Lesson 0004 · integration (not new API)</p>
+      <h1>Pipeline mix — fluency under load</h1>
+      <p class="lede">You passed isolated drills. Fluency = stack ops without reopening docs. No new surface area — only composition.</p>
+    </header>
+
+    <div class="win">
+      <strong>Win:</strong> Finish <code>04_pipeline_mix.py</code> cold-ish. Each ex is a mini work ticket: filter + reshape + join in one function.
+    </div>
+
+    <h2>0. Why this exists</h2>
+    <p>
+      Isolated PASS ≠ fluent. Work code is always a <em>chain</em>.
+      These 8 tickets force retrieval of 0001–0003 together.
+    </p>
+
+    <h2>1. Toolbox (all you need)</h2>
+    <pre><code>from pyspark.sql.functions import col, lit, when
+
+# 0001
+df.filter(cond).select(...)
+(col("a") &gt; 1) &amp; (col("b") == "x")   # &amp; | ~   not and/or
+
+# 0002
+df.withColumn("x", expr)
+df.withColumnRenamed("old", "new")
+df.drop("a", "b")
+col("n").cast("double").alias("n_d")
+lit("v1")
+when(cond, val).otherwise(val)
+
+# 0003
+left.join(right, "key", "inner"|"left"|"right"|"full"|"left_semi"|"left_anti")
+left.join(right, left.k == right.k, "inner")  # both keys unless careful
+o.alias("o").join(c.alias("c"), col("o.k") == col("c.k"), "inner")</code></pre>
+    <p>Full patterns: <a href="../reference/dataframe-core-syntax.html">reference</a> · lessons
+      <a href="0001-filter-select-cold.html">0001</a>
+      <a href="0002-withcolumn-rename.html">0002</a>
+      <a href="0003-joins.html">0003</a>
+    </p>
+
+    <h2>2. Data for the drills</h2>
+    <pre><code>orders(order_id, cust_id, amount, status)
+  1 10 100 open
+  2 20 250 open
+  3 10  40 closed
+  4 99  80 open      ← orphan
+  5 20 150 closed
+  6 30 300 open
+
+customers(cust_id, name, region, tier)
+  10 Alice east  gold
+  20 Bob   west  silver
+  30 Carol east  gold
+  40 Dan   north bronze  ← no orders</code></pre>
+
+    <h2>3. Knowledge → each exercise (solution kit)</h2>
+
+    <h3>ex1 — open + high + east</h3>
+    <p>Filter first (cheaper to think), join, filter region, select.</p>
+    <pre><code>(
+    orders.filter((col("status") == "open") &amp; (col("amount") &gt; 100))
+          .join(customers, "cust_id", "inner")
+          .filter(col("region") == "east")
+          .select("order_id", "name", "amount", "region")
+)
+# only order 6 (Carol 300). order 2 is west; order 1 amount not &gt; 100</code></pre>
+
+    <h3>ex2 — left enrich + band + tax + drop</h3>
+    <pre><code>(
+    orders.join(customers, "cust_id", "left")
+          .withColumn("band", when(col("amount") &gt;= 150, "high").otherwise("low"))
+          .withColumn("tax", col("amount") * 0.1)
+          .drop("status", "tier")
+          .select("order_id", "cust_id", "name", "region", "amount", "band", "tax")
+)
+# orphan order 4: name/region null, still in result</code></pre>
+
+    <h3>ex3 — gold customers who ordered (semi) + lit</h3>
+    <pre><code>(
+    customers.filter(col("tier") == "gold")
+             .join(orders, "cust_id", "left_semi")
+             .withColumn("version", lit("v1"))
+             .select("cust_id", "name", "region", "version")
+)
+# Alice + Carol. Dan is bronze. gold with no orders would drop on semi.</code></pre>
+
+    <h3>ex4 — anti + flag</h3>
+    <pre><code>(
+    orders.join(customers, "cust_id", "left_anti")
+          .withColumn("flag", lit("orphan"))
+          .select("order_id", "cust_id", "amount", "flag")
+)</code></pre>
+
+    <h3>ex5 — join + dual filter + rename + cast</h3>
+    <pre><code>(
+    orders.join(customers, "cust_id", "inner")
+          .filter((col("status") == "closed") &amp; (col("region") == "west"))
+          .withColumnRenamed("amount", "spend")
+          .select(
+              "order_id", "name", "spend",
+              col("spend").cast("double").alias("spend_d"),
+          )
+)
+# Bob order 5 only</code></pre>
+
+    <h3>ex6 — full outer + isNotNull flag</h3>
+    <pre><code>(
+    orders.join(customers, "cust_id", "full")
+          .withColumn(
+              "has_order",
+              when(col("order_id").isNotNull(), "yes").otherwise("no"),
+          )
+          .select("cust_id", "name", "order_id", "has_order")
+)
+# Dan: has_order no. Orphan 99: name null, has_order yes.
+# Alice/Bob appear once per order row.</code></pre>
+
+    <h3>ex7 — fee rule by tier</h3>
+    <pre><code>(
+    orders.join(customers, "cust_id", "inner")
+          .filter(col("status") == "open")
+          .withColumn(
+              "fee",
+              when(col("tier") == "gold", lit(0.0)).otherwise(col("amount") * 0.05),
+          )
+          .drop("status", "tier", "region")
+          .select("order_id", "name", "amount", "fee")
+)
+# gold Alice/Carol fee 0; silver Bob fee 12.5; orphan open order dropped (inner)</code></pre>
+
+    <h3>ex8 — Column join + alias rename</h3>
+    <pre><code>o = orders.alias("o")
+c = customers.alias("c")
+(
+    o.join(c, col("o.cust_id") == col("c.cust_id"), "inner")
+     .filter(col("o.amount") &gt;= 100)
+     .select(
+         col("o.order_id").alias("order_id"),
+         col("c.name").alias("customer_name"),
+         col("o.amount").alias("amount"),
+     )
+)</code></pre>
+
+    <h2>4. Fluency protocol (do this)</h2>
+    <ol>
+      <li>Close solutions. Open only this page or the reference.</li>
+      <li>Write one function. Run checker. Fix from FAIL lines only.</li>
+      <li>After 8/8: delete your bodies (or copy file aside), wait 10 min, redo blind.</li>
+      <li>Still sticky? Re-run that single lesson’s 8 drills once, then come back.</li>
+    </ol>
+
+    <h2>5. Run</h2>
+    <pre><code>cd exercises
+../.venv/bin/python 04_pipeline_mix.py</code></pre>
+
+    <div class="source">
+      <strong>Primary sources:</strong> your 0001–0003 lessons +
+      <a href="https://spark.apache.org/docs/latest/api/python/reference/pyspark.sql/api/pyspark.sql.DataFrame.join.html">join</a> /
+      <a href="https://spark.apache.org/docs/latest/api/python/reference/pyspark.sql/api/pyspark.sql.DataFrame.withColumn.html">withColumn</a> /
+      <a href="https://spark.apache.org/docs/latest/api/python/reference/pyspark.sql/api/pyspark.sql.DataFrame.filter.html">filter</a>
+    </div>
+
+    <div class="ask">
+      Paste a FAIL block (got vs expected). Teacher debugs the chain with you.
+    </div>
+
+    <footer>
+      Core 0004 groupBy still waiting after this fluency pass — or do mix first.
+      Prev: <a href="0003-joins.html">0003</a>
+    </footer>
+  </div>
+</body>
+</html>

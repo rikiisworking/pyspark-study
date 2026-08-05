@@ -14,10 +14,11 @@ You already own/write Spark pipelines at work, but cold-writing DataFrame API tr
 - Prefer short syntax drills over architecture theory
 - Caveman + ponytail: tight lessons, no fluff scaffolding
 
-## Core track (4 lessons)
+## Core track
 1. filter + select — done
 2. withColumn / reshape — done
-3. joins — current
+3. joins — done
+3b. pipeline mix (fluency, no new API) — current
 4. groupBy + agg — last core piece for mission chain
 
 Optional later: window, read/write + nulls.

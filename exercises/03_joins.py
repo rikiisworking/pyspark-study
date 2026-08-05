@@ -29,7 +29,7 @@ def ex1_inner_on_key(orders: DataFrame, customers: DataFrame) -> DataFrame:
     Inner join on cust_id (shared key name).
     Columns: order_id, name, amount
     """
-    raise NotImplementedError
+    return orders.join(customers, "cust_id").select("order_id", "name", "amount")
 
 
 def ex2_left_orders(orders: DataFrame, customers: DataFrame) -> DataFrame:
@@ -37,7 +37,7 @@ def ex2_left_orders(orders: DataFrame, customers: DataFrame) -> DataFrame:
     Left join: keep every order; customer fields null if no match.
     Columns: order_id, name, amount
     """
-    raise NotImplementedError
+    return orders.join(customers, "cust_id", "left").select("order_id", "name", "amount")
 
 
 def ex3_right_customers(orders: DataFrame, customers: DataFrame) -> DataFrame:
@@ -45,7 +45,7 @@ def ex3_right_customers(orders: DataFrame, customers: DataFrame) -> DataFrame:
     Right join: keep every customer; order fields null if no match.
     Columns: name, order_id
     """
-    raise NotImplementedError
+    return orders.join(customers, "cust_id", "right").select("name", "order_id")
 
 
 def ex4_full_outer(orders: DataFrame, customers: DataFrame) -> DataFrame:
@@ -53,7 +53,7 @@ def ex4_full_outer(orders: DataFrame, customers: DataFrame) -> DataFrame:
     Full outer on cust_id.
     Columns: order_id, name
     """
-    raise NotImplementedError
+    return orders.join(customers, "cust_id", "full").select("order_id", "name")
 
 
 def ex5_left_semi(orders: DataFrame, customers: DataFrame) -> DataFrame:
@@ -62,7 +62,7 @@ def ex5_left_semi(orders: DataFrame, customers: DataFrame) -> DataFrame:
     Columns (order matters): order_id, cust_id, amount
     Left-side fields only. Use select(...) to pin order if needed.
     """
-    raise NotImplementedError
+    return orders.join(customers, "cust_id", "left_semi").select("order_id", "cust_id", "amount")
 
 
 def ex6_left_anti(orders: DataFrame, customers: DataFrame) -> DataFrame:
@@ -70,7 +70,7 @@ def ex6_left_anti(orders: DataFrame, customers: DataFrame) -> DataFrame:
     Left anti: orders with NO matching customer.
     Columns (order matters): order_id, cust_id, amount
     """
-    raise NotImplementedError
+    return orders.join(customers, "cust_id", "left_anti").select("order_id", "cust_id", "amount")
 
 
 def ex7_inner_east_only(orders: DataFrame, customers: DataFrame) -> DataFrame:
@@ -78,8 +78,8 @@ def ex7_inner_east_only(orders: DataFrame, customers: DataFrame) -> DataFrame:
     Inner join, then keep region == "east".
     Columns: order_id, name, region, amount
     """
-    raise NotImplementedError
-
+    return orders.join(customers, "cust_id").filter(col("region")=="east").select("order_id", "name", "region", "amount")
+    
 
 def ex8_column_join_select(orders: DataFrame, customers: DataFrame) -> DataFrame:
     """
@@ -89,7 +89,7 @@ def ex8_column_join_select(orders: DataFrame, customers: DataFrame) -> DataFrame
       order_id, name, amount
     Tip: alias frames or pick columns from one side only.
     """
-    raise NotImplementedError
+    return orders.join(customers, orders.cust_id == customers.cust_id).select("order_id", "name", "amount")
 
 
 # ---------------------------------------------------------------------------
