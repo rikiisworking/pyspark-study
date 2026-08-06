@@ -40,20 +40,22 @@ from pyspark.sql.functions import col, lit, when
 # ---------------------------------------------------------------------------
 
 
-def ex1_open_high_east(
-    orders: DataFrame, customers: DataFrame
-) -> DataFrame:
+def ex1_open_high_east(orders: DataFrame, customers: DataFrame) -> DataFrame:
     """
     Open orders only (status == "open"), amount > 100.
     Inner-join customers. Keep region == "east".
     Columns: order_id, name, amount, region
     """
-    raise NotImplementedError
+    return (
+        orders
+        .filter((col("status") == "open") & (col("amount") > 100))
+        .join(customers, "cust_id")
+        .filter(col("region") == "east")
+        .select("order_id", "name", "amount", "region")
+    )
 
 
-def ex2_enrich_band_and_tax(
-    orders: DataFrame, customers: DataFrame
-) -> DataFrame:
+def ex2_enrich_band_and_tax(orders: DataFrame, customers: DataFrame) -> DataFrame:
     """
     Left-join customers onto orders (keep every order).
     Add:
@@ -62,8 +64,15 @@ def ex2_enrich_band_and_tax(
     Drop status and tier.
     Columns: order_id, cust_id, name, region, amount, band, tax
     """
-    raise NotImplementedError
-
+    return (
+        orders
+        .join(customers, "cust_id", "left")
+        .withColumn("band", when(col("amount") < 150, "low").otherwise("high"))
+        .withColumn("tax", col("amount") *0.1)
+        .drop(col("status"))
+        .drop(col("tier"))
+        .select("order_id", "cust_id", "name", "region", "amount", "band", "tax")
+    )
 
 def ex3_gold_customers_order_stats_shape(
     orders: DataFrame, customers: DataFrame
@@ -74,47 +83,62 @@ def ex3_gold_customers_order_stats_shape(
     Add version = lit("v1").
     Columns: cust_id, name, region, version
     """
-    raise NotImplementedError
+    
+    return (
+        customers
+        .join(orders, "cust_id", "left_semi")
+        .filter(col("tier")=="gold")
+        .withColumn("version", lit("v1"))
+        .select("cust_id", "name", "region", "version")
+    )
 
 
-def ex4_orphan_orders_flagged(
-    orders: DataFrame, customers: DataFrame
-) -> DataFrame:
+def ex4_orphan_orders_flagged(orders: DataFrame, customers: DataFrame) -> DataFrame:
     """
     Orders with NO matching customer (left_anti).
     Add flag = lit("orphan").
     Columns: order_id, cust_id, amount, flag
     """
-    raise NotImplementedError
+    return (
+        orders
+        .join(customers, "cust_id", "left_anti")
+        .withColumn("flag", lit("orphan"))
+        .select("order_id", "cust_id", "amount", "flag")
+    )
 
-
-def ex5_closed_west_rename(
-    orders: DataFrame, customers: DataFrame
-) -> DataFrame:
+def ex5_closed_west_rename(orders: DataFrame, customers: DataFrame) -> DataFrame:
     """
     Inner join. Keep status == "closed" and region == "west".
     Rename amount -> spend. Cast spend to double as spend_d
     (keep spend too).
     Columns: order_id, name, spend, spend_d
     """
-    raise NotImplementedError
+    return (
+        orders
+        .join(customers, "cust_id")
+        .filter((col("status") == "closed") & (col("region") == "west"))
+        .withColumnRenamed("amount", "spend")
+        .withColumn("spend_d", col("spend").cast("double"))
+        .select("order_id", "name", "spend", "spend_d")
+    )
 
 
-def ex6_full_roster(
-    orders: DataFrame, customers: DataFrame
-) -> DataFrame:
+def ex6_full_roster(orders: DataFrame, customers: DataFrame) -> DataFrame:
     """
     Full outer join on cust_id.
     Add has_order = when(order_id.isNotNull(), "yes").otherwise("no")
     Columns: cust_id, name, order_id, has_order
     Note: after string-key full join there is one cust_id.
     """
-    raise NotImplementedError
+    return (
+        orders
+        .join(customers, "cust_id", "full")
+        .withColumn("has_order", when(col("order_id").isNotNull(), "yes").otherwise("no"))
+        .select("cust_id", "name", "order_id", "has_order")
+    )
 
 
-def ex7_pipeline_chain(
-    orders: DataFrame, customers: DataFrame
-) -> DataFrame:
+def ex7_pipeline_chain(orders: DataFrame, customers: DataFrame) -> DataFrame:
     """
     One chain (or clear steps — result matters):
       1. Inner join on cust_id
@@ -123,12 +147,17 @@ def ex7_pipeline_chain(
       4. Drop status, tier, region
       5. Select: order_id, name, amount, fee
     """
-    raise NotImplementedError
+    return (
+        orders
+        .join(customers, "cust_id")
+        .filter(col("status") == "open")
+        .withColumn("fee", when(col("tier") == "gold", lit(0)).otherwise(col("amount") *0.05))
+        .select("order_id", "name", "amount", "fee")
+    )
 
 
-def ex8_column_join_project(
-    orders: DataFrame, customers: DataFrame
-) -> DataFrame:
+
+def ex8_column_join_project(orders: DataFrame, customers: DataFrame) -> DataFrame:
     """
     Inner join with Column condition (not string key):
       orders.cust_id == customers.cust_id
@@ -136,7 +165,17 @@ def ex8_column_join_project(
     Project: order_id, customer_name (alias of name), amount
     Use aliases if you hit ambiguous columns.
     """
-    raise NotImplementedError
+    return (
+        orders
+        .join(customers, orders.cust_id == customers.cust_id)
+        .filter(col("amount") >= 100)
+        .select(
+            "order_id",
+            col("name").alias("customer_name"),
+            "amount"
+        )
+    )
+
 
 
 # ---------------------------------------------------------------------------
@@ -212,9 +251,7 @@ if __name__ == "__main__":
             (
                 "ex3_gold_customers_order_stats_shape",
                 lambda s: (
-                    ex3_gold_customers_order_stats_shape(
-                        _orders(s), _customers(s)
-                    ),
+                    ex3_gold_customers_order_stats_shape(_orders(s), _customers(s)),
                     [
                         (10, "Alice", "east", "v1"),
                         (30, "Carol", "east", "v1"),

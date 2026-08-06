@@ -12,7 +12,9 @@
       <a href="../MISSION.md">Mission</a> ·
       <a href="../lessons/0001-filter-select-cold.html">0001</a> ·
       <a href="../lessons/0002-withcolumn-rename.html">0002</a> ·
-      <a href="../lessons/0003-joins.html">0003</a>
+      <a href="../lessons/0003-joins.html">0003</a> ·
+      <a href="../lessons/0004-pipeline-mix.html">0004</a> ·
+      <a href="../lessons/0005-groupby-agg.html">0005</a>
     </nav>
     <header>
       <p class="eyebrow">Reference · print-friendly</p>
@@ -90,18 +92,44 @@ left.join(right, left.k == right.k, "inner")  # keeps both key cols
 o.alias("o").join(c.alias("c"), col("o.k") == col("c.k"), "inner")</code></pre>
     <p><a href="https://spark.apache.org/docs/latest/api/python/reference/pyspark.sql/api/pyspark.sql.DataFrame.join.html">join API</a></p>
 
+    <h2>groupBy + agg</h2>
+    <pre><code>from pyspark.sql.functions import col, sum, count, avg, max, min
+
+df.groupBy("region").count()                 # region, count
+df.groupBy("region").sum("amount")           # region, sum(amount)
+df.groupBy("region", "status").count()
+
+df.groupBy("region").agg(
+    count("*").alias("n"),
+    sum("amount").alias("total"),
+    avg("amount").alias("avg_amt"),
+    max("amount").alias("hi"),
+)
+
+# pre-agg filter (rows) vs post-agg filter (groups / HAVING)
+df.filter(col("status") == "open").groupBy("region").agg(...)
+df.groupBy("region").agg(sum("amount").alias("total")).filter(col("total") &gt; 280)</code></pre>
+    <p>
+      <a href="https://spark.apache.org/docs/latest/api/python/reference/pyspark.sql/api/pyspark.sql.DataFrame.groupBy.html">groupBy</a>
+      ·
+      <a href="https://spark.apache.org/docs/latest/api/python/reference/pyspark.sql/api/pyspark.sql.GroupedData.agg.html">agg</a>
+    </p>
+
     <h2>Pipeline skeleton</h2>
     <pre><code>out = (
     orders.join(customers, "cust_id", "left")
       .filter(col("region") == "east")
-      .select("order_id", "name", "amount")
+      .groupBy("name")
+      .agg(sum("amount").alias("spend"), count("*").alias("n"))
 )</code></pre>
 
     <footer>
       Lessons:
       <a href="../lessons/0001-filter-select-cold.html">0001</a> ·
       <a href="../lessons/0002-withcolumn-rename.html">0002</a> ·
-      <a href="../lessons/0003-joins.html">0003</a>
+      <a href="../lessons/0003-joins.html">0003</a> ·
+      <a href="../lessons/0004-pipeline-mix.html">0004</a> ·
+      <a href="../lessons/0005-groupby-agg.html">0005</a>
     </footer>
   </div>
 </body>

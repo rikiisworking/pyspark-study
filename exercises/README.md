@@ -26,6 +26,7 @@ cd exercises
 | `02_withcolumn.py` | withColumn, rename, drop, cast, lit, when | [0002](../lessons/0002-withcolumn-rename.html) |
 | `03_joins.py` | inner/left/right/full/semi/anti, Column join | [0003](../lessons/0003-joins.html) |
 | `04_pipeline_mix.py` | mix 0001–0003 into mini pipelines | [0004 mix](../lessons/0004-pipeline-mix.html) |
+| `05_groupby_agg.py` | groupBy, count/sum/avg/max, multi-key, having, join+agg | [0005](../lessons/0005-groupby-agg.html) |
 | `solutions/` | reference answers — after a real try | |
 
 Row order does not matter. Column **names and order** do.

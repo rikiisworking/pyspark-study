@@ -1,0 +1,249 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>0005 · groupBy + agg</title>
+  <link rel="stylesheet" href="../assets/styles.css" />
+</head>
+<body>
+  <div class="wrap">
+    <nav class="crumbs">
+      <a href="0004-pipeline-mix.html">← 0004</a> ·
+      <a href="../reference/dataframe-core-syntax.html">Reference</a> ·
+      <a href="../exercises/05_groupby_agg.py">Exercises</a>
+    </nav>
+    <header>
+      <p class="eyebrow">Lesson 0005 · DataFrame API</p>
+      <h1>groupBy + agg</h1>
+      <p class="lede">Collapse many rows into one per key. Last core piece for cold-writing work pipelines: filter → join → groupBy → agg.</p>
+    </header>
+
+    <div class="win">
+      <strong>Win:</strong> Cold-write <code>df.groupBy(...).agg(...)</code> with clean aliases, multi-key groups, and post-agg filter (“having”).
+    </div>
+
+    <h2>0. Map: knowledge → exercise</h2>
+    <pre><code>ex1  groupBy + .count()
+ex2  groupBy + .sum("amount")  (default col name)
+ex3  groupBy + agg(avg(...).alias(...))
+ex4  groupBy + multi agg (count + sum + max)
+ex5  groupBy two keys
+ex6  filter then groupBy (pre-agg)
+ex7  groupBy then filter on agg col (post-agg / having)
+ex8  join + groupBy + agg (pipeline)</code></pre>
+
+    <h2>1. Toy data (same as drills)</h2>
+    <pre><code>orders
+  id | region | amount | status
+   1 | east   |    100 | open
+   2 | west   |    200 | open
+   3 | east   |     50 | closed
+   4 | east   |    150 | open
+   5 | west   |     80 | closed
+   6 | north  |    300 | open
+
+customers (ex8 only)
+  cust_id | name
+       10 | Alice
+       20 | Bob
+
+# ex8 uses separate fact/dim — see section 7</code></pre>
+
+    <h2>2. Mental model</h2>
+    <p>
+      <code>groupBy</code> does not return a normal DataFrame yet — it returns
+      <a href="https://spark.apache.org/docs/latest/api/python/reference/pyspark.sql/api/pyspark.sql.GroupedData.html"><code>GroupedData</code></a>.
+      You must aggregate (<code>count</code>/<code>sum</code>/<code>agg</code>/…) to get a DataFrame again.
+    </p>
+    <pre><code>df.groupBy("region")           # GroupedData — not show()-able usefully
+   .agg(sum("amount").alias("total"))  # DataFrame again</code></pre>
+
+    <h2>3. Signature</h2>
+    <p>
+      <a href="https://spark.apache.org/docs/latest/api/python/reference/pyspark.sql/api/pyspark.sql.DataFrame.groupBy.html"><code>df.groupBy(*cols)</code></a>
+      · alias <code>groupby</code>
+    </p>
+    <pre><code>df.groupBy("region")
+df.groupBy("region", "status")
+df.groupBy(col("region"))</code></pre>
+    <p>
+      Then either a convenience method or
+      <a href="https://spark.apache.org/docs/latest/api/python/reference/pyspark.sql/api/pyspark.sql.GroupedData.agg.html"><code>.agg(...)</code></a>:
+    </p>
+    <pre><code>from pyspark.sql.functions import col, sum, count, avg, max, min
+
+# convenience
+df.groupBy("region").count()              # cols: region, count
+df.groupBy("region").sum("amount")        # cols: region, sum(amount)
+
+# preferred at work: agg + alias (clean names)
+df.groupBy("region").agg(
+    count("*").alias("n"),
+    sum("amount").alias("total"),
+    avg("amount").alias("avg_amt"),
+    max("amount").alias("hi"),
+)</code></pre>
+    <p>
+      Default names like <code>sum(amount)</code> are legal but ugly in pipelines.
+      Prefer <code>.alias("total")</code> every time you care about the contract.
+    </p>
+
+    <h2>4. Core patterns (solution kit)</h2>
+
+    <h3>ex1 — count rows per region</h3>
+    <pre><code>orders.groupBy("region").count()
+# east 3, west 2, north 1
+# columns: region, count</code></pre>
+
+    <h3>ex2 — sum with default name</h3>
+    <pre><code>orders.groupBy("region").sum("amount")
+# columns: region, sum(amount)
+# east 300, west 280, north 300</code></pre>
+
+    <h3>ex3 — avg with alias</h3>
+    <pre><code>(
+    orders.groupBy("region")
+          .agg(avg("amount").alias("avg_amount"))
+)
+# east 100.0, west 140.0, north 300.0</code></pre>
+
+    <h3>ex4 — several aggs at once</h3>
+    <pre><code>(
+    orders.groupBy("region").agg(
+        count("*").alias("n"),
+        sum("amount").alias("total"),
+        max("amount").alias("hi"),
+    )
+)
+# east: n=3 total=300 hi=150
+# west: n=2 total=280 hi=200
+# north: n=1 total=300 hi=300</code></pre>
+
+    <h3>ex5 — two keys</h3>
+    <pre><code>orders.groupBy("region", "status").count()
+# each (region, status) pair is its own group</code></pre>
+
+    <h3>ex6 — filter first (pre-agg)</h3>
+    <pre><code>(
+    orders.filter(col("status") == "open")
+          .groupBy("region")
+          .agg(sum("amount").alias("open_total"))
+)
+# open only: east 250, west 200, north 300</code></pre>
+
+    <h3>ex7 — filter after agg (SQL HAVING)</h3>
+    <pre><code>(
+    orders.groupBy("region")
+          .agg(sum("amount").alias("total"))
+          .filter(col("total") &gt; 250)
+)
+# total &gt; 280 → east 300, north 300 (west 280 drops)</code></pre>
+    <p>Rule: conditions on <em>raw</em> columns go <strong>before</strong> groupBy. Conditions on <em>aggregates</em> go <strong>after</strong> (filter the result).</p>
+
+    <h3>ex8 — join then aggregate</h3>
+    <pre><code># sales: order_id, cust_id, amount
+# customers: cust_id, name
+(
+    sales.join(customers, "cust_id", "inner")
+         .groupBy("name")
+         .agg(sum("amount").alias("spend"), count("*").alias("orders"))
+)</code></pre>
+
+    <h2>5. Imports for drills</h2>
+    <pre><code>from pyspark.sql.functions import col, sum, count, avg, max, min</code></pre>
+    <p><code>sum</code>/<code>max</code>/<code>min</code> shadow Python builtins — fine inside Spark code; or use <code>from pyspark.sql import functions as F</code> and <code>F.sum(...)</code>.</p>
+
+    <h2>6. Work mental model</h2>
+    <ul>
+      <li>One row per group key(s) after agg.</li>
+      <li>Need clean names for next join/select → <code>.alias</code> inside <code>agg</code>.</li>
+      <li>Pre-agg filter shrinks input; post-agg filter keeps big groups only.</li>
+      <li>Mission chain: <code>filter → join → groupBy → agg → select</code>.</li>
+    </ul>
+
+    <h2>7. Retrieval</h2>
+    <div id="q1"></div>
+    <div id="q2"></div>
+    <div id="q3"></div>
+
+    <h2>8. Cold write</h2>
+    <div id="drill1"></div>
+    <div id="drill2"></div>
+
+    <h2>9. Run real Python</h2>
+    <p>Sections 3–4 are the full solution kit for all 8 drills.</p>
+    <pre><code>cd exercises
+../.venv/bin/python 05_groupby_agg.py</code></pre>
+    <p>
+      File: <code>exercises/05_groupby_agg.py</code> ·
+      Peek after try: <code>exercises/solutions/05_groupby_agg.py</code>
+    </p>
+
+    <div class="source">
+      <strong>Primary source:</strong>
+      <a href="https://spark.apache.org/docs/latest/api/python/reference/pyspark.sql/api/pyspark.sql.DataFrame.groupBy.html">DataFrame.groupBy</a>
+      ·
+      <a href="https://spark.apache.org/docs/latest/api/python/reference/pyspark.sql/api/pyspark.sql.GroupedData.agg.html">GroupedData.agg</a>
+    </div>
+
+    <div class="ask">
+      FAIL on column name like <code>sum(amount)</code>? Either match that exact name or use <code>.alias</code> in <code>agg</code>. Paste FAIL block here.
+    </div>
+
+    <footer>
+      Prev: <a href="0004-pipeline-mix.html">0004</a>
+      · Ref: <a href="../reference/dataframe-core-syntax.html">dataframe-core-syntax</a>
+      · Mission chain complete after this PASSes
+    </footer>
+  </div>
+  <script src="../assets/quiz.js"></script>
+  <script>
+    LessonUI.Quiz.mount("#q1", {
+      prompt: "What does df.groupBy(\"region\") return before you aggregate?",
+      options: [
+        { text: "A GroupedData handle, not a finished DataFrame", correct: true, why: "You must call count/sum/agg (etc.) to get a DataFrame again." },
+        { text: "A DataFrame with one row per region already", correct: false, why: "Rows appear only after an aggregate method." },
+        { text: "A Python dict mapping keys to row lists", correct: false, why: "Still lazy Spark plan objects, not local dicts." },
+        { text: "An RDD of (key, Iterable) pairs only", correct: false, why: "RDD groupBy exists elsewhere; DF path is GroupedData." },
+      ],
+    });
+    LessonUI.Quiz.mount("#q2", {
+      prompt: "Keep regions whose total amount is greater than 250. Where does the filter go?",
+      options: [
+        { text: "After agg, on the aggregated column (having)", correct: true, why: "total does not exist until after sum/agg; post-agg filter = HAVING." },
+        { text: "Before groupBy, on amount greater than 250", correct: false, why: "That filters rows, not groups with large totals." },
+        { text: "Inside groupBy as a second string argument", correct: false, why: "groupBy only takes grouping columns." },
+        { text: "Never — Spark forbids filter after groupBy", correct: false, why: "Filtering the agg result is standard." },
+      ],
+    });
+    LessonUI.Quiz.mount("#q3", {
+      prompt: "Preferred way to name sum(amount) as total in a pipeline?",
+      options: [
+        { text: "groupBy(...).agg(sum(\"amount\").alias(\"total\"))", correct: true, why: "agg + alias is the clean contract; default name is sum(amount)." },
+        { text: "groupBy(...).sum(\"amount\").alias(\"total\")", correct: false, why: "alias on the whole DataFrame is not how you rename one col here." },
+        { text: "groupBy(...).sum(alias=\"total\", col=\"amount\")", correct: false, why: "No such kwargs on GroupedData.sum." },
+        { text: "groupBy(...).select(sum as total only)", correct: false, why: "select without groupBy is not a group aggregate." },
+      ],
+    });
+    LessonUI.Drill.mount("#drill1", {
+      prompt: "Per region: count rows as n, sum amount as total",
+      accept: [
+        'orders.groupBy("region").agg(count("*").alias("n"), sum("amount").alias("total"))',
+        "orders.groupBy('region').agg(count('*').alias('n'), sum('amount').alias('total'))",
+        'orders.groupBy("region").agg(count("*").alias("n"),sum("amount").alias("total"))',
+      ],
+      solution: 'orders.groupBy("region").agg(count("*").alias("n"), sum("amount").alias("total"))',
+    });
+    LessonUI.Drill.mount("#drill2", {
+      prompt: "Open status only, then sum amount per region as open_total",
+      accept: [
+        'orders.filter(col("status") == "open").groupBy("region").agg(sum("amount").alias("open_total"))',
+        "orders.filter(col('status') == 'open').groupBy('region').agg(sum('amount').alias('open_total'))",
+        'orders.filter(col("status")=="open").groupBy("region").agg(sum("amount").alias("open_total"))',
+      ],
+      solution: 'orders.filter(col("status") == "open").groupBy("region").agg(sum("amount").alias("open_total"))',
+    });
+  </script>
+</body>
+</html>
