@@ -15,7 +15,8 @@
       <a href="../lessons/0003-joins.html">0003</a> ·
       <a href="../lessons/0004-pipeline-mix.html">0004</a> ·
       <a href="../lessons/0005-groupby-agg.html">0005</a> ·
-      <a href="../lessons/0006-full-pipeline-mix.html">0006</a>
+      <a href="../lessons/0006-full-pipeline-mix.html">0006</a> ·
+      <a href="../lessons/0007-window-functions.html">0007</a>
     </nav>
     <header>
       <p class="eyebrow">Reference · print-friendly</p>
@@ -124,6 +125,34 @@ df.groupBy("region").agg(sum("amount").alias("total")).filter(col("total") &gt; 
       .agg(sum("amount").alias("spend"), count("*").alias("n"))
 )</code></pre>
 
+    <h2>Window</h2>
+    <pre><code>from pyspark.sql import Window
+from pyspark.sql.functions import col, row_number, rank, dense_rank, lag, lead, sum
+
+w = Window.partitionBy("region").orderBy(col("amount").desc(), col("id"))
+df.withColumn("rn", row_number().over(w))
+df.withColumn("r", rank().over(Window.partitionBy("region").orderBy(col("amount").desc())))
+df.withColumn("d", dense_rank().over(Window.partitionBy("region").orderBy(col("amount").desc())))
+
+w_day = Window.partitionBy("region").orderBy("day")
+df.withColumn("prev", lag("amount").over(w_day))
+df.withColumn("nxt", lead("amount").over(w_day))
+df.withColumn("running", sum("amount").over(w_day))   # default ordered frame
+
+w_all = Window.partitionBy("region")                  # no order → whole partition
+df.withColumn("reg_total", sum("amount").over(w_all))
+
+# top-1 per region
+df.withColumn("rn", row_number().over(w)).filter(col("rn") == 1)</code></pre>
+    <p>
+      <a href="https://spark.apache.org/docs/latest/api/python/reference/pyspark.sql/api/pyspark.sql.Window.html">Window</a>
+      ·
+      <a href="https://spark.apache.org/docs/latest/api/python/reference/pyspark.sql/api/pyspark.sql.functions.row_number.html">row_number</a>
+      ·
+      <a href="https://spark.apache.org/docs/latest/api/python/reference/pyspark.sql/api/pyspark.sql.functions.lag.html">lag</a>
+    </p>
+    <p>groupBy collapses; window keeps rows and adds columns.</p>
+
     <footer>
       Lessons:
       <a href="../lessons/0001-filter-select-cold.html">0001</a> ·
@@ -131,7 +160,8 @@ df.groupBy("region").agg(sum("amount").alias("total")).filter(col("total") &gt; 
       <a href="../lessons/0003-joins.html">0003</a> ·
       <a href="../lessons/0004-pipeline-mix.html">0004</a> ·
       <a href="../lessons/0005-groupby-agg.html">0005</a> ·
-      <a href="../lessons/0006-full-pipeline-mix.html">0006</a>
+      <a href="../lessons/0006-full-pipeline-mix.html">0006</a> ·
+      <a href="../lessons/0007-window-functions.html">0007</a>
     </footer>
   </div>
 </body>

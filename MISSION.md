@@ -21,8 +21,9 @@ You already own/write Spark pipelines at work, but cold-writing DataFrame API tr
 3b. pipeline mix (fluency, no new API) — done
 4. groupBy + agg — done
 4b. full pipeline mix (filter→join→groupBy→agg) — done
+5. window functions — current
 
-Optional later: window, read/write + nulls.
+Optional later: read/write + nulls.
 
 ## Out of scope
 - Cluster ops, YARN/K8s, cost tuning (until syntax solid)

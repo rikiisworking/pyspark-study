@@ -1,0 +1,220 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>0007 · window functions</title>
+  <link rel="stylesheet" href="../assets/styles.css" />
+</head>
+<body>
+  <div class="wrap">
+    <nav class="crumbs">
+      <a href="0006-full-pipeline-mix.html">← 0006</a> ·
+      <a href="../reference/dataframe-core-syntax.html">Reference</a> ·
+      <a href="../exercises/07_window.py">Exercises</a>
+    </nav>
+    <header>
+      <p class="eyebrow">Lesson 0007 · DataFrame API</p>
+      <h1>Window functions</h1>
+      <p class="lede">Keep every row, add ranks / lags / running totals over a partition. Work pipelines need this after groupBy fluency.</p>
+    </header>
+
+    <div class="win">
+      <strong>Win:</strong> Cold-write <code>fn().over(Window.partitionBy(...).orderBy(...))</code> for row_number, rank, lag, and window sum.
+    </div>
+
+    <h2>0. Map: knowledge → exercise</h2>
+    <pre><code>ex1  row_number over partition + order
+ex2  rank (ties share, gaps after)
+ex3  dense_rank (ties share, no gaps)
+ex4  lag previous amount
+ex5  lead next amount
+ex6  sum over whole partition (no order)
+ex7  running sum (orderBy + default frame)
+ex8  top-1 per partition (row_number + filter)</code></pre>
+
+    <h2>1. Toy data (same as drills)</h2>
+    <pre><code>orders
+  id | region | amount | day
+   1 | east   |    100 |   1
+   2 | east   |    200 |   2
+   3 | east   |    200 |   3   ← tie with id 2 on amount
+   4 | west   |    150 |   1
+   5 | west   |     80 |   2
+   6 | west   |    300 |   3
+   7 | east   |     50 |   4</code></pre>
+
+    <h2>2. Mental model</h2>
+    <p>
+      <strong>groupBy + agg</strong> collapses rows (one row per key).
+      <strong>Window</strong> keeps all rows and adds columns computed over a peer set.
+    </p>
+    <pre><code>from pyspark.sql import Window
+from pyspark.sql.functions import col, row_number, rank, dense_rank, lag, lead, sum
+
+w = Window.partitionBy("region").orderBy(col("amount").desc())
+df.withColumn("rn", row_number().over(w))</code></pre>
+    <p>
+      Spec pieces (official
+      <a href="https://spark.apache.org/docs/latest/api/python/reference/pyspark.sql/api/pyspark.sql.Window.html"><code>Window</code></a>):
+    </p>
+    <ul>
+      <li><code>partitionBy</code> — peers (like group key; optional)</li>
+      <li><code>orderBy</code> — order inside partition (required for rank/lag/running)</li>
+      <li><code>rowsBetween</code> / <code>rangeBetween</code> — frame; defaults matter</li>
+    </ul>
+    <p>
+      Default frame (docs): <em>no</em> order → whole partition;
+      <em>with</em> order → growing frame from unbounded preceding to current row
+      (running aggregates “just work”).
+    </p>
+
+    <h2>3. Core patterns (solution kit)</h2>
+
+    <h3>ex1 — row_number (unique ranks)</h3>
+    <pre><code>w = Window.partitionBy("region").orderBy(col("amount").desc(), col("id"))
+orders.withColumn("rn", row_number().over(w)).select("id", "region", "amount", "rn")
+# east: id2 rn=1, id3 rn=2, id1 rn=3, id7 rn=4
+# west: id6 rn=1, id4 rn=2, id5 rn=3
+# Secondary orderBy id makes ties deterministic.</code></pre>
+
+    <h3>ex2 — rank (Olympic gaps)</h3>
+    <pre><code>w = Window.partitionBy("region").orderBy(col("amount").desc())
+orders.withColumn("r", rank().over(w)).select("id", "region", "amount", "r")
+# east amounts 200,200,100,50 → ranks 1,1,3,4 (gap after tie)
+# west 300,150,80 → 1,2,3</code></pre>
+
+    <h3>ex3 — dense_rank (no gaps)</h3>
+    <pre><code>w = Window.partitionBy("region").orderBy(col("amount").desc())
+orders.withColumn("d", dense_rank().over(w)).select("id", "region", "amount", "d")
+# east 200,200,100,50 → 1,1,2,3</code></pre>
+
+    <h3>ex4 — lag previous amount</h3>
+    <pre><code>w = Window.partitionBy("region").orderBy("day")
+orders.withColumn("prev", lag("amount").over(w)).select("id", "region", "day", "amount", "prev")
+# first day in region → null</code></pre>
+
+    <h3>ex5 — lead next amount</h3>
+    <pre><code>w = Window.partitionBy("region").orderBy("day")
+orders.withColumn("nxt", lead("amount").over(w)).select("id", "region", "day", "amount", "nxt")
+# last day in region → null</code></pre>
+
+    <h3>ex6 — total over whole partition</h3>
+    <pre><code>w = Window.partitionBy("region")   # no orderBy → full partition frame
+orders.withColumn("reg_total", sum("amount").over(w)).select("id", "region", "amount", "reg_total")
+# east every row 550; west every row 530
+# Rows kept (unlike groupBy).</code></pre>
+
+    <h3>ex7 — running total by day</h3>
+    <pre><code>w = Window.partitionBy("region").orderBy("day")
+orders.withColumn("running", sum("amount").over(w)).select("id", "region", "day", "amount", "running")
+# east: 100 → 300 → 500 → 550</code></pre>
+
+    <h3>ex8 — top amount row per region</h3>
+    <pre><code>w = Window.partitionBy("region").orderBy(col("amount").desc(), col("id"))
+(
+    orders.withColumn("rn", row_number().over(w))
+          .filter(col("rn") == 1)
+          .select("id", "region", "amount")
+)
+# east id2 amount 200; west id6 amount 300</code></pre>
+
+    <h2>4. Imports for drills</h2>
+    <pre><code>from pyspark.sql import Window
+from pyspark.sql.functions import col, row_number, rank, dense_rank, lag, lead, sum</code></pre>
+
+    <h2>5. Work mental model</h2>
+    <ul>
+      <li>Need one row per group → <code>groupBy</code>. Need annotate every row → window.</li>
+      <li>Top-N per key: <code>row_number</code> then <code>filter(rn &lt;= N)</code>.</li>
+      <li>Day-over-day: <code>lag</code> then subtract (null first day).</li>
+      <li>Always decide <code>partitionBy</code> + <code>orderBy</code> before picking the function.</li>
+    </ul>
+
+    <h2>6. Retrieval</h2>
+    <div id="q1"></div>
+    <div id="q2"></div>
+    <div id="q3"></div>
+
+    <h2>7. Cold write</h2>
+    <div id="drill1"></div>
+    <div id="drill2"></div>
+
+    <h2>8. Run real Python</h2>
+    <p>Sections 2–3 are the full solution kit for all 8 drills.</p>
+    <pre><code>cd exercises
+../.venv/bin/python 07_window.py</code></pre>
+    <p>
+      File: <code>exercises/07_window.py</code> ·
+      Peek after try: <code>exercises/solutions/07_window.py</code>
+    </p>
+
+    <div class="source">
+      <strong>Primary source:</strong>
+      <a href="https://spark.apache.org/docs/latest/api/python/reference/pyspark.sql/api/pyspark.sql.Window.html">pyspark.sql.Window</a>
+      ·
+      <a href="https://spark.apache.org/docs/latest/api/python/reference/pyspark.sql/api/pyspark.sql.functions.row_number.html">row_number</a>
+      ·
+      <a href="https://spark.apache.org/docs/latest/api/python/reference/pyspark.sql/api/pyspark.sql.functions.lag.html">lag</a>
+    </div>
+
+    <div class="ask">
+      Stuck on null first-day lag, or rank vs dense_rank? Paste FAIL block or your WindowSpec here.
+    </div>
+
+    <footer>
+      Prev: <a href="0006-full-pipeline-mix.html">0006</a>
+      · Ref: <a href="../reference/dataframe-core-syntax.html">dataframe-core-syntax</a>
+    </footer>
+  </div>
+  <script src="../assets/quiz.js"></script>
+  <script>
+    LessonUI.Quiz.mount("#q1", {
+      prompt: "groupBy vs window — which keeps all input rows?",
+      options: [
+        { text: "Window: adds cols; rows stay unless you filter", correct: true, why: "Window annotates. groupBy+agg collapses to one row per key." },
+        { text: "groupBy: always keeps every original input row", correct: false, why: "After agg you get one row per group key." },
+        { text: "Both collapse rows to one per partition key", correct: false, why: "Only groupBy+agg collapses; window does not." },
+        { text: "Neither can compute a sum over peers at all", correct: false, why: "Both can sum; the row shape differs." },
+      ],
+    });
+    LessonUI.Quiz.mount("#q2", {
+      prompt: "Two east rows amount=200. rank vs dense_rank for next amount=100?",
+      options: [
+        { text: "rank → 3 for 100; dense_rank → 2 for 100", correct: true, why: "rank leaves a gap after ties; dense_rank does not." },
+        { text: "rank → 2 for 100; dense_rank → 3 for 100", correct: false, why: "Swapped: rank gaps, dense does not." },
+        { text: "Both always assign 2 after any two-way tie", correct: false, why: "rank jumps to 3 after two rows at rank 1." },
+        { text: "row_number is required; rank cannot handle ties", correct: false, why: "rank/dense_rank exist specifically for ties." },
+      ],
+    });
+    LessonUI.Quiz.mount("#q3", {
+      prompt: "Running total of amount by day within region. WindowSpec?",
+      options: [
+        { text: "partitionBy region, orderBy day; sum(...).over(w)", correct: true, why: "Default ordered frame is unbounded preceding → current row." },
+        { text: "partitionBy day only; no orderBy; then sum over w", correct: false, why: "Peers would be same day across regions; not a time series." },
+        { text: "groupBy region then withColumn sum of amount col", correct: false, why: "groupBy collapses; that is not a per-row running total." },
+        { text: "orderBy region only; lag amount is the running sum", correct: false, why: "lag is previous value, not cumulative sum." },
+      ],
+    });
+    LessonUI.Drill.mount("#drill1", {
+      prompt: "Add rn = row_number per region, amount desc then id",
+      accept: [
+        'orders.withColumn("rn", row_number().over(Window.partitionBy("region").orderBy(col("amount").desc(), col("id"))))',
+        "orders.withColumn('rn', row_number().over(Window.partitionBy('region').orderBy(col('amount').desc(), col('id'))))",
+        'orders.withColumn("rn",row_number().over(Window.partitionBy("region").orderBy(col("amount").desc(),col("id"))))',
+      ],
+      solution: 'orders.withColumn("rn", row_number().over(Window.partitionBy("region").orderBy(col("amount").desc(), col("id"))))',
+    });
+    LessonUI.Drill.mount("#drill2", {
+      prompt: "Add prev = lag amount, partition region, order day",
+      accept: [
+        'orders.withColumn("prev", lag("amount").over(Window.partitionBy("region").orderBy("day")))',
+        "orders.withColumn('prev', lag('amount').over(Window.partitionBy('region').orderBy('day')))",
+        'orders.withColumn("prev", lag("amount", 1).over(Window.partitionBy("region").orderBy("day")))',
+        "orders.withColumn('prev', lag('amount', 1).over(Window.partitionBy('region').orderBy('day')))",
+      ],
+      solution: 'orders.withColumn("prev", lag("amount").over(Window.partitionBy("region").orderBy("day")))',
+    });
+  </script>
+</body>
+</html>

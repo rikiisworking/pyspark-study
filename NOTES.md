@@ -14,4 +14,5 @@
 - Runnable drills: `exercises/*.py` via `.venv` (pyspark 4.2). Checker in `exercises/harness.py`
 - Lesson HTML must include knowledge enough to write exercise solutions (map knowledge → ex#)
 - After isolated PASS, offer integration mix before next new API (`04` after joins; `06` after groupBy)
-- After core chain fluent, optional: window, read/write + nulls
+- After core chain fluent: window next (keep rows + annotate), then read/write + nulls
+- Window vs groupBy is the main conceptual fork — hammer it in 0007

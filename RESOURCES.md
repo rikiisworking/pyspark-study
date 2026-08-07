@@ -18,6 +18,10 @@
   Join types + ambiguous keys. Use for: lesson 0003 and join+groupBy pipelines.
 - [SparkSession.createDataFrame](https://spark.apache.org/docs/latest/api/python/reference/pyspark.sql/api/pyspark.sql.SparkSession.createDataFrame.html)
   How toy frames get built for practice. Use for: local drills without real files.
+- [pyspark.sql.Window](https://spark.apache.org/docs/latest/api/python/reference/pyspark.sql/api/pyspark.sql.Window.html) · [Window API index](https://spark.apache.org/docs/latest/api/python/reference/pyspark.sql/window.html)
+  partitionBy / orderBy / rowsBetween / rangeBetween + default frames. Use for: lesson 0007.
+- [functions.row_number](https://spark.apache.org/docs/latest/api/python/reference/pyspark.sql/api/pyspark.sql.functions.row_number.html) · [rank](https://spark.apache.org/docs/latest/api/python/reference/pyspark.sql/api/pyspark.sql.functions.rank.html) · [dense_rank](https://spark.apache.org/docs/latest/api/python/reference/pyspark.sql/api/pyspark.sql.functions.dense_rank.html) · [lag](https://spark.apache.org/docs/latest/api/python/reference/pyspark.sql/api/pyspark.sql.functions.lag.html) · [lead](https://spark.apache.org/docs/latest/api/python/reference/pyspark.sql/api/pyspark.sql.functions.lead.html)
+  Ranking + offset window fns. Use for: top-N, day-over-day, running totals with sum().over.
 
 ## Wisdom (Communities)
 

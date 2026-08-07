@@ -28,6 +28,7 @@ cd exercises
 | `04_pipeline_mix.py` | mix 0001–0003 into mini pipelines | [0004 mix](../lessons/0004-pipeline-mix.html) |
 | `05_groupby_agg.py` | groupBy, count/sum/avg/max, multi-key, having, join+agg | [0005](../lessons/0005-groupby-agg.html) |
 | `06_full_pipeline.py` | mix 0001–0005 into full work-style chains | [0006 mix](../lessons/0006-full-pipeline-mix.html) |
+| `07_window.py` | partitionBy/orderBy, rank, lag/lead, running sum, top-N | [0007](../lessons/0007-window-functions.html) |
 | `solutions/` | reference answers — after a real try | |
 
 Row order does not matter. Column **names and order** do.
