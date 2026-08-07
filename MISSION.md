@@ -19,7 +19,8 @@ You already own/write Spark pipelines at work, but cold-writing DataFrame API tr
 2. withColumn / reshape — done
 3. joins — done
 3b. pipeline mix (fluency, no new API) — done
-4. groupBy + agg — current (last core piece for mission chain)
+4. groupBy + agg — done
+4b. full pipeline mix (filter→join→groupBy→agg) — done
 
 Optional later: window, read/write + nulls.
 

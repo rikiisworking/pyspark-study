@@ -13,4 +13,5 @@
 - Every lesson: one write-from-memory drill + tight quiz
 - Runnable drills: `exercises/*.py` via `.venv` (pyspark 4.2). Checker in `exercises/harness.py`
 - Lesson HTML must include knowledge enough to write exercise solutions (map knowledge → ex#)
-- After isolated PASS, offer integration mix (`04_pipeline_mix`) before next new API
+- After isolated PASS, offer integration mix before next new API (`04` after joins; `06` after groupBy)
+- After core chain fluent, optional: window, read/write + nulls

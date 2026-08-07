@@ -141,7 +141,7 @@ def ex8_spend_by_customer(sales: DataFrame, customers: DataFrame) -> DataFrame:
             .groupBy("name")
             .agg(
                 sum("amount").alias("spend"),
-                count("*").alias("orders")\
+                count("*").alias("orders")
             )
             .select("name", "spend", "orders")
     )

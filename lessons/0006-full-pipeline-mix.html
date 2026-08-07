@@ -1,0 +1,235 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>0006 · full pipeline mix</title>
+  <link rel="stylesheet" href="../assets/styles.css" />
+</head>
+<body>
+  <div class="wrap">
+    <nav class="crumbs">
+      <a href="0005-groupby-agg.html">← 0005</a> ·
+      <a href="../reference/dataframe-core-syntax.html">Reference</a> ·
+      <a href="../exercises/06_full_pipeline.py">Exercises</a>
+    </nav>
+    <header>
+      <p class="eyebrow">Lesson 0006 · integration (not new API)</p>
+      <h1>Full pipeline mix</h1>
+      <p class="lede">Mission success chain under load: filter → reshape → join → groupBy → agg. Same pattern as 0004, now with aggregation in the stack.</p>
+    </header>
+
+    <div class="win">
+      <strong>Win:</strong> Finish <code>06_full_pipeline.py</code> cold-ish. Each ticket is a mini work pipeline — no new surface area.
+    </div>
+
+    <h2>0. Why this exists</h2>
+    <p>
+      You passed isolated groupBy. Fluency = <em>compose</em> it with everything else without reopening docs.
+      This is the mission “write a multi-step chain” check, not a new topic.
+    </p>
+
+    <h2>1. Toolbox (all you need)</h2>
+    <pre><code>from pyspark.sql.functions import col, lit, when, sum, count
+
+# 0001
+df.filter(cond).select(...)
+(col("a") &gt; 1) &amp; (col("b") == "x")
+
+# 0002
+df.withColumn("x", expr)
+when(cond, val).otherwise(val)
+lit(0.0)
+
+# 0003
+left.join(right, "key", "inner"|"left"|...)
+customers.join(orders, "cust_id", "left")   # keep all customers
+
+# 0005
+df.groupBy("k").agg(sum("amount").alias("total"), count("*").alias("n"))
+df.groupBy("k").agg(...).filter(col("total") &gt; 200)   # having
+count(col("order_id"))   # skips nulls → 0 for unmatched left rows</code></pre>
+    <p>Ref: <a href="../reference/dataframe-core-syntax.html">dataframe-core-syntax</a> ·
+      <a href="0001-filter-select-cold.html">0001</a>
+      <a href="0002-withcolumn-rename.html">0002</a>
+      <a href="0003-joins.html">0003</a>
+      <a href="0005-groupby-agg.html">0005</a>
+    </p>
+
+    <h2>2. Data for the drills</h2>
+    <pre><code>orders(order_id, cust_id, amount, status)
+  1 10 100 open
+  2 20 250 open
+  3 10  40 closed
+  4 99  80 open      ← orphan
+  5 20 150 closed
+  6 30 300 open
+  7 30  50 open
+
+customers(cust_id, name, region, tier)
+  10 Alice east  gold
+  20 Bob   west  silver
+  30 Carol east  gold
+  40 Dan   north bronze  ← no orders</code></pre>
+
+    <h2>3. Knowledge → each exercise</h2>
+
+    <h3>ex1 — open + high + join</h3>
+    <pre><code>(
+    orders.filter((col("status") == "open") &amp; (col("amount") &gt;= 100))
+          .join(customers, "cust_id", "inner")
+          .select("order_id", "name", "amount", "region")
+)
+# 1 Alice, 2 Bob, 6 Carol</code></pre>
+
+    <h3>ex2 — left join + when + tax</h3>
+    <pre><code>(
+    orders.join(customers, "cust_id", "left")
+          .filter(col("amount") &gt;= 100)
+          .withColumn("band", when(col("amount") &gt;= 150, "high").otherwise("low"))
+          .withColumn("tax", col("amount") * 0.1)
+          .select("order_id", "name", "amount", "band", "tax")
+)</code></pre>
+
+    <h3>ex3 — open → join → sum by region</h3>
+    <pre><code>(
+    orders.filter(col("status") == "open")
+          .join(customers, "cust_id", "inner")
+          .groupBy("region")
+          .agg(sum("amount").alias("open_total"))
+)
+# east 450 (100+300+50), west 250 — orphan open dropped by inner</code></pre>
+
+    <h3>ex4 — join → multi agg by tier</h3>
+    <pre><code>(
+    orders.join(customers, "cust_id", "inner")
+          .groupBy("tier")
+          .agg(sum("amount").alias("spend"), count("*").alias("n"))
+)
+# gold 490 / 4, silver 400 / 2</code></pre>
+
+    <h3>ex5 — join → filter → agg → having</h3>
+    <pre><code>(
+    orders.join(customers, "cust_id", "inner")
+          .filter(col("region") == "east")
+          .groupBy("name")
+          .agg(sum("amount").alias("spend"))
+          .filter(col("spend") &gt; 200)
+)
+# Carol 350 only (Alice 140 fails having)</code></pre>
+
+    <h3>ex6 — left join customers + count(order_id)</h3>
+    <pre><code>(
+    customers.join(orders, "cust_id", "left")
+             .groupBy("name")
+             .agg(count(col("order_id")).alias("n_orders"))
+)
+# Dan → 0  (count skips null order_id; count("*") would wrongly give 1)</code></pre>
+    <p><strong>Trap:</strong> left-side “how many matches?” needs <code>count(col("right_key"))</code>, not <code>count("*")</code>.</p>
+
+    <h3>ex7 — filter amount → join → gold → sum</h3>
+    <pre><code>(
+    orders.filter(col("amount") &gt;= 100)
+          .join(customers, "cust_id", "inner")
+          .filter(col("tier") == "gold")
+          .groupBy("name")
+          .agg(sum("amount").alias("spend"))
+)
+# Alice 100, Carol 300</code></pre>
+
+    <h3>ex8 — mission chain</h3>
+    <pre><code>(
+    orders.filter(col("status") == "open")
+          .join(customers, "cust_id", "inner")
+          .withColumn(
+              "fee",
+              when(col("tier") == "gold", lit(0.0)).otherwise(col("amount") * 0.05),
+          )
+          .groupBy("name")
+          .agg(count("*").alias("orders"), sum("fee").alias("fee_total"))
+)
+# Alice 1 / 0.0, Bob 1 / 12.5, Carol 2 / 0.0</code></pre>
+
+    <h2>4. Order habits (work)</h2>
+    <ul>
+      <li>Filter early when the predicate is on raw rows.</li>
+      <li>Join for dimension fields, then groupBy business key.</li>
+      <li>Agg aliases before post-filter (having) or next join.</li>
+      <li>Left + count: null-aware count on the right key.</li>
+    </ul>
+
+    <h2>5. Retrieval</h2>
+    <div id="q1"></div>
+    <div id="q2"></div>
+    <div id="q3"></div>
+
+    <h2>6. Cold write</h2>
+    <div id="drill1"></div>
+
+    <h2>7. Run</h2>
+    <pre><code>cd exercises
+../.venv/bin/python 06_full_pipeline.py</code></pre>
+    <p>
+      File: <code>exercises/06_full_pipeline.py</code> ·
+      Peek after try: <code>exercises/solutions/06_full_pipeline.py</code>
+    </p>
+
+    <div class="source">
+      <strong>Primary source:</strong> your own
+      <a href="../reference/dataframe-core-syntax.html">core syntax sheet</a>
+      — this lesson is retrieval, not new docs. Fallback APIs:
+      <a href="https://spark.apache.org/docs/latest/api/python/reference/pyspark.sql/api/pyspark.sql.DataFrame.join.html">join</a>,
+      <a href="https://spark.apache.org/docs/latest/api/python/reference/pyspark.sql/api/pyspark.sql.DataFrame.groupBy.html">groupBy</a>.
+    </div>
+
+    <div class="ask">
+      FAIL? Paste got vs expected. Say which step you think broke (filter / join / agg / having).
+    </div>
+
+    <footer>
+      Prev: <a href="0005-groupby-agg.html">0005</a>
+      · Optional later: window · read/write + nulls
+    </footer>
+  </div>
+  <script src="../assets/quiz.js"></script>
+  <script>
+    LessonUI.Quiz.mount("#q1", {
+      prompt: "customers left-join orders; count rows per name so Dan is 0. Which count?",
+      options: [
+        { text: "count(col(\"order_id\")) — nulls not counted", correct: true, why: "Unmatched left rows have null order_id; count skips nulls → 0." },
+        { text: "count(\"*\") — every left row is one", correct: false, why: "Dan would get 1 even with no orders." },
+        { text: "sum(col(\"order_id\")) — ids as counts", correct: false, why: "Sums ids; not a row count." },
+        { text: "count(lit(1)) on customers alone", correct: false, why: "Never sees the join; always 1 per customer." },
+      ],
+    });
+    LessonUI.Quiz.mount("#q2", {
+      prompt: "Keep customers whose total spend exceeds 200. Where does that filter go?",
+      options: [
+        { text: "After groupBy.agg, on the spend column", correct: true, why: "spend exists only after aggregation (HAVING pattern)." },
+        { text: "Before join, amount greater than 200", correct: false, why: "Filters single orders, not customer totals." },
+        { text: "Inside groupBy as a second key", correct: false, why: "groupBy only takes grouping columns." },
+        { text: "Only in SQL; DataFrame API cannot", correct: false, why: "filter after agg is standard DF API." },
+      ],
+    });
+    LessonUI.Quiz.mount("#q3", {
+      prompt: "Open orders only, then sum amount by region after joining customers. Filter status…",
+      options: [
+        { text: "Before groupBy (and usually before join)", correct: true, why: "status is a row field; drop closed rows early." },
+        { text: "After sum, as status == open", correct: false, why: "status is not on the aggregated result." },
+        { text: "Only as a groupBy key with region", correct: false, why: "That splits groups; does not drop closed alone." },
+        { text: "Never — open is implied by amount", correct: false, why: "status is independent of amount." },
+      ],
+    });
+    LessonUI.Drill.mount("#drill1", {
+      prompt: "open only → inner join → sum amount per region as open_total",
+      accept: [
+        'orders.filter(col("status") == "open").join(customers, "cust_id", "inner").groupBy("region").agg(sum("amount").alias("open_total"))',
+        'orders.filter(col("status")=="open").join(customers,"cust_id","inner").groupBy("region").agg(sum("amount").alias("open_total"))',
+        "orders.filter(col('status') == 'open').join(customers, 'cust_id', 'inner').groupBy('region').agg(sum('amount').alias('open_total'))",
+        'orders.filter(col("status") == "open").join(customers, "cust_id").groupBy("region").agg(sum("amount").alias("open_total"))',
+      ],
+      solution: 'orders.filter(col("status") == "open").join(customers, "cust_id", "inner").groupBy("region").agg(sum("amount").alias("open_total"))',
+    });
+  </script>
+</body>
+</html>
