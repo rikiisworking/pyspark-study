@@ -18,4 +18,5 @@
 - Window vs groupBy is the main conceptual fork — hammer it in 0007
 - After isolated PASS, offer integration mix before next new API (`04` after joins; `06` after groupBy; `08` after window)
 - Null trap: `col == value` drops nulls (three-valued logic); use `isNull` / `eqNullSafe` when needed
-- After nulls PASS: optional mix that injects nulls into a short pipeline, then read/write
+- After nulls PASS: nulls+pipeline mix (10), then read/write (parquet/csv)
+- Mix 0010 hammers: fill-before-agg, open-OR-isNull, left+coalesce region
