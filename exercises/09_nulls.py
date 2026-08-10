@@ -23,7 +23,7 @@ Stuck after a real try: exercises/solutions/09_nulls.py
 from __future__ import annotations
 
 from pyspark.sql import DataFrame
-from pyspark.sql.functions import col  # noqa: F401 — use what you need
+from pyspark.sql.functions import col, coalesce, lit,when  # noqa: F401 — use what you need
 
 # ---------------------------------------------------------------------------
 # YOUR CODE — replace `raise NotImplementedError`
@@ -35,7 +35,12 @@ def ex1_null_amounts(orders: DataFrame) -> DataFrame:
     Keep rows where amount is null.
     Columns: id, region, amount, status
     """
-    raise NotImplementedError
+    result = (
+        orders
+            .filter(col("amount").isNull())
+            .select("id", "region", "amount", "status")
+    )
+    return result
 
 
 def ex2_not_null_amounts(orders: DataFrame) -> DataFrame:
@@ -43,7 +48,12 @@ def ex2_not_null_amounts(orders: DataFrame) -> DataFrame:
     Keep rows where amount is not null (0 stays).
     Columns: id, region, amount, status
     """
-    raise NotImplementedError
+    result = (
+        orders
+            .filter(col("amount").isNotNull())
+            .select("id", "region", "amount", "status")
+    )
+    return result
 
 
 def ex3_status_open(orders: DataFrame) -> DataFrame:
@@ -51,7 +61,12 @@ def ex3_status_open(orders: DataFrame) -> DataFrame:
     status == "open". Null status is dropped (three-valued logic).
     Columns: id, region, amount, status
     """
-    raise NotImplementedError
+    result = (
+        orders
+            .filter(col("status")=="open")
+            .select("id", "region", "amount", "status")
+    )
+    return result
 
 
 def ex4_drop_amount_or_status_null(orders: DataFrame) -> DataFrame:
@@ -59,7 +74,12 @@ def ex4_drop_amount_or_status_null(orders: DataFrame) -> DataFrame:
     Drop rows if amount is null OR status is null.
     Columns: id, region, amount, status
     """
-    raise NotImplementedError
+    result = (
+        orders
+            .filter((col("amount").isNotNull()) & (col("status").isNotNull()))
+            .select("id", "region", "amount", "status")
+    )
+    return result
 
 
 def ex5_fill_amount_zero(orders: DataFrame) -> DataFrame:
@@ -67,7 +87,10 @@ def ex5_fill_amount_zero(orders: DataFrame) -> DataFrame:
     Fill null amount with 0. Other columns unchanged.
     Columns: id, region, amount, status
     """
-    raise NotImplementedError
+    result = (
+        orders.fillna({"amount":0}).select("id", "region", "amount", "status")
+    )
+    return result
 
 
 def ex6_coalesce_region(orders: DataFrame) -> DataFrame:
@@ -75,7 +98,12 @@ def ex6_coalesce_region(orders: DataFrame) -> DataFrame:
     region_filled = coalesce(region, "unknown").
     Columns: id, region, region_filled
     """
-    raise NotImplementedError
+    result = (
+        orders
+            .withColumn("region_filled", coalesce(col("region"), lit("unknown")))
+            .select("id", "region", "region_filled")
+    )
+    return result
 
 
 def ex7_amount_flag(orders: DataFrame) -> DataFrame:
@@ -83,7 +111,12 @@ def ex7_amount_flag(orders: DataFrame) -> DataFrame:
     flag = "missing" if amount is null else "present".
     Columns: id, amount, flag
     """
-    raise NotImplementedError
+    result = (
+        orders
+            .withColumn("flag", when(col("amount").isNull(), "missing").otherwise("present"))
+            .select("id", "amount", "flag")
+    )
+    return result
 
 
 def ex8_open_or_null_status(orders: DataFrame) -> DataFrame:
@@ -91,8 +124,12 @@ def ex8_open_or_null_status(orders: DataFrame) -> DataFrame:
     Keep status is null OR status == "open".
     Columns: id, region, amount, status
     """
-    raise NotImplementedError
-
+    result = (
+        orders
+            .filter((col("status").isNull()) | (col("status")=="open"))
+            .select("id", "region", "amount", "status")
+    )
+    return result
 
 # ---------------------------------------------------------------------------
 # Checker — do not edit below
