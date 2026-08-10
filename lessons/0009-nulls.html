@@ -1,0 +1,203 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>0009 · nulls</title>
+  <link rel="stylesheet" href="../assets/styles.css" />
+</head>
+<body>
+  <div class="wrap">
+    <nav class="crumbs">
+      <a href="0008-window-pipeline-mix.html">← 0008</a> ·
+      <a href="../reference/dataframe-core-syntax.html">Reference</a> ·
+      <a href="../exercises/09_nulls.py">Exercises</a>
+    </nav>
+    <header>
+      <p class="eyebrow">Lesson 0009 · DataFrame API</p>
+      <h1>Nulls</h1>
+      <p class="lede">Detect, drop, fill, and coalesce missing values — every work pipeline hits these.</p>
+    </header>
+
+    <div class="win">
+      <strong>Win:</strong> Cold-write <code>isNull</code> / <code>isNotNull</code>, <code>na.drop</code>, <code>na.fill</code>, <code>coalesce</code>, and null-aware <code>when</code>.
+    </div>
+
+    <h2>0. Map: knowledge → exercise</h2>
+    <pre><code>ex1  filter amount.isNull()
+ex2  filter amount.isNotNull()
+ex3  status == "open"  (null status dropped)
+ex4  na.drop(subset=[amount, status])
+ex5  na.fill amount → 0
+ex6  coalesce region → "unknown"
+ex7  when isNull → flag column
+ex8  open OR status.isNull()</code></pre>
+
+    <h2>1. Toy data (same as drills)</h2>
+    <pre><code>orders
+  id | region | amount | status
+   1 | east   |    100 | open
+   2 | east   |   null | open
+   3 | west   |     50 | null
+   4 | null   |   null | closed
+   5 | west   |      0 | open      ← 0 is not null
+   6 | east   |    200 | closed</code></pre>
+
+    <h2>2. Mental model</h2>
+    <p>
+      Spark SQL uses <strong>three-valued logic</strong>: true / false / unknown (null).
+      Comparisons with null yield null (treated as not-true in <code>filter</code>).
+      So <code>status == "open"</code> drops rows where status is null — not a bug.
+    </p>
+    <pre><code>from pyspark.sql.functions import col, lit, coalesce, when
+
+col("amount").isNull()
+col("amount").isNotNull()
+# WRONG: col("amount") == None   # does not mean isNull
+
+df.na.drop(subset=["amount"])           # alias: dropna
+df.na.fill({"amount": 0})               # alias: fillna
+df.withColumn("r", coalesce(col("region"), lit("unknown")))</code></pre>
+    <p>
+      Docs:
+      <a href="https://spark.apache.org/docs/latest/api/python/reference/pyspark.sql/api/pyspark.sql.Column.isNull.html">isNull</a> ·
+      <a href="https://spark.apache.org/docs/latest/api/python/reference/pyspark.sql/api/pyspark.sql.DataFrameNaFunctions.html">DataFrame.na</a> ·
+      <a href="https://spark.apache.org/docs/latest/api/python/reference/pyspark.sql/api/pyspark.sql.functions.coalesce.html">coalesce</a>
+    </p>
+
+    <h2>3. Core patterns (solution kit)</h2>
+
+    <h3>ex1 — keep null amounts</h3>
+    <pre><code>orders.filter(col("amount").isNull())
+# ids 2, 4</code></pre>
+
+    <h3>ex2 — keep non-null amounts</h3>
+    <pre><code>orders.filter(col("amount").isNotNull())
+# ids 1, 3, 5, 6  (amount 0 stays)</code></pre>
+
+    <h3>ex3 — equality filter drops null status</h3>
+    <pre><code>orders.filter(col("status") == "open")
+# ids 1, 2, 5 — not id 3 (status null → predicate null → dropped)</code></pre>
+
+    <h3>ex4 — drop if amount <em>or</em> status null</h3>
+    <pre><code>orders.na.drop(subset=["amount", "status"])
+# keeps 1, 5, 6</code></pre>
+
+    <h3>ex5 — fill amount nulls with 0</h3>
+    <pre><code>orders.na.fill({"amount": 0})
+# id2 amount 0, id4 amount 0; other cols unchanged</code></pre>
+
+    <h3>ex6 — coalesce region</h3>
+    <pre><code>(
+    orders.withColumn(
+        "region_filled",
+        coalesce(col("region"), lit("unknown")),
+    ).select("id", "region", "region_filled")
+)
+# id4 → unknown</code></pre>
+
+    <h3>ex7 — flag missing amount</h3>
+    <pre><code>(
+    orders.select(
+        "id",
+        "amount",
+        when(col("amount").isNull(), "missing")
+          .otherwise("present")
+          .alias("flag"),
+    )
+)
+# id5 amount 0 → present</code></pre>
+
+    <h3>ex8 — open <em>or</em> null status</h3>
+    <pre><code>orders.filter(
+    col("status").isNull() | (col("status") == "open")
+)
+# ids 1, 2, 3, 5</code></pre>
+
+    <h2>4. Traps (work)</h2>
+    <ul>
+      <li><code>col("x") == None</code> / Python <code>is None</code> on a Column — not how you test null. Use <code>isNull()</code>.</li>
+      <li><code>0</code> and <code>""</code> are values, not null.</li>
+      <li><code>na.fill(0)</code> fills <em>numeric</em> nulls only; strings need a string fill or a dict per column.</li>
+      <li>Null-safe equality exists: <code>col("a").eqNullSafe(col("b"))</code> (SQL <code>&lt;=&gt;</code>) — for joins/filters where null = null should match.</li>
+    </ul>
+
+    <h2>5. Retrieval</h2>
+    <div id="q1"></div>
+    <div id="q2"></div>
+    <div id="q3"></div>
+
+    <h2>6. Cold write</h2>
+    <div id="drill1"></div>
+
+    <h2>7. Run</h2>
+    <pre><code>cd exercises
+../.venv/bin/python 09_nulls.py</code></pre>
+    <p>
+      File: <code>exercises/09_nulls.py</code> ·
+      Peek after try: <code>exercises/solutions/09_nulls.py</code>
+    </p>
+
+    <div class="source">
+      <strong>Primary source:</strong>
+      <a href="https://spark.apache.org/docs/latest/api/python/reference/pyspark.sql/api/pyspark.sql.DataFrameNaFunctions.html">DataFrameNaFunctions</a>
+      (drop / fill) ·
+      <a href="https://spark.apache.org/docs/latest/api/python/reference/pyspark.sql/api/pyspark.sql.functions.coalesce.html">coalesce</a> ·
+      <a href="https://spark.apache.org/docs/latest/api/python/reference/pyspark.sql/api/pyspark.sql.Column.isNull.html">isNull</a>
+    </div>
+
+    <div class="ask">
+      FAIL? Paste got vs expected. Say which step: isNull, equality trap, drop subset, fill dict, or coalesce.
+    </div>
+
+    <footer>
+      Prev: <a href="0008-window-pipeline-mix.html">0008</a>
+      · Next after PASS: optional nulls mix, or read/write
+    </footer>
+  </div>
+  <script src="../assets/quiz.js"></script>
+  <script>
+    LessonUI.Quiz.mount("#q1", {
+      prompt: "filter(col(\"status\") == \"open\"). Row with status null…",
+      options: [
+        { text: "Drops — null compare is not true", correct: true, why: "Three-valued logic: null == \"open\" is null; filter keeps only true." },
+        { text: "Keeps — null matches every string", correct: false, why: "Null does not match; it fails the predicate." },
+        { text: "Errors — equality forbids null left", correct: false, why: "No error; result is null, treated as drop." },
+        { text: "Keeps — Spark treats null as open", correct: false, why: "Null is unknown, not open." },
+      ],
+    });
+    LessonUI.Quiz.mount("#q2", {
+      prompt: "amount is 0. amount.isNull() is…",
+      options: [
+        { text: "false — zero is a real value", correct: true, why: "0 is stored; only SQL NULL is null." },
+        { text: "true — zero means missing data", correct: false, why: "Business might treat 0 as missing; Spark does not." },
+        { text: "null — zero is unknown amount", correct: false, why: "isNull on a non-null cell is false." },
+        { text: "error — isNull rejects integers", correct: false, why: "isNull works on any column type." },
+      ],
+    });
+    LessonUI.Quiz.mount("#q3", {
+      prompt: "First non-null of region, else \"unknown\". Best tool?",
+      options: [
+        { text: "coalesce(col(\"region\"), lit(\"unknown\"))", correct: true, why: "coalesce returns first non-null argument." },
+        { text: "na.drop(subset=[\"region\"]) only once", correct: false, why: "drop removes rows; does not fill." },
+        { text: "filter(col(\"region\").isNull()) alone", correct: false, why: "That keeps only nulls; no fill." },
+        { text: "groupBy(\"region\").count() then join", correct: false, why: "Aggregation does not fill nulls." },
+      ],
+    });
+    LessonUI.Drill.mount("#drill1", {
+      prompt: "fill amount nulls with 0; keep all other columns",
+      accept: [
+        'orders.na.fill({"amount": 0})',
+        "orders.na.fill({'amount': 0})",
+        'orders.fillna({"amount": 0})',
+        "orders.fillna({'amount': 0})",
+        'orders.na.fill(0, subset=["amount"])',
+        "orders.na.fill(0, subset=['amount'])",
+        'orders.fillna(0, subset=["amount"])',
+        "orders.fillna(0, subset=['amount'])",
+      ],
+      solution: 'orders.na.fill({"amount": 0})',
+    });
+  </script>
+</body>
+</html>

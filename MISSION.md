@@ -22,8 +22,10 @@ You already own/write Spark pipelines at work, but cold-writing DataFrame API tr
 4. groupBy + agg — done
 4b. full pipeline mix (filter→join→groupBy→agg) — done
 5. window functions — done
+5b. window + pipeline mix — done
+6. nulls (isNull / fill / coalesce) — next
 
-Optional later: read/write + nulls.
+Optional later: read/write (parquet/csv).
 
 ## Out of scope
 - Cluster ops, YARN/K8s, cost tuning (until syntax solid)

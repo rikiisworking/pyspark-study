@@ -16,7 +16,9 @@
       <a href="../lessons/0004-pipeline-mix.html">0004</a> ·
       <a href="../lessons/0005-groupby-agg.html">0005</a> ·
       <a href="../lessons/0006-full-pipeline-mix.html">0006</a> ·
-      <a href="../lessons/0007-window-functions.html">0007</a>
+      <a href="../lessons/0007-window-functions.html">0007</a> ·
+      <a href="../lessons/0008-window-pipeline-mix.html">0008</a> ·
+      <a href="../lessons/0009-nulls.html">0009</a>
     </nav>
     <header>
       <p class="eyebrow">Reference · print-friendly</p>
@@ -153,6 +155,37 @@ df.withColumn("rn", row_number().over(w)).filter(col("rn") == 1)</code></pre>
     </p>
     <p>groupBy collapses; window keeps rows and adds columns.</p>
 
+    <h2>Nulls</h2>
+    <pre><code>from pyspark.sql.functions import col, lit, coalesce, when
+
+col("amount").isNull()
+col("amount").isNotNull()
+# not: col("amount") == None
+
+df.filter(col("status") == "open")          # null status dropped
+df.filter(col("status").isNull() | (col("status") == "open"))
+
+df.na.drop(subset=["amount", "status"])     # alias: dropna
+df.na.fill({"amount": 0})                   # alias: fillna
+df.na.fill(0, subset=["amount"])
+
+df.withColumn("r", coalesce(col("region"), lit("unknown")))
+df.select(
+    "id",
+    when(col("amount").isNull(), "missing").otherwise("present").alias("flag"),
+)
+
+col("a").eqNullSafe(col("b"))               # null = null is true</code></pre>
+    <p>
+      <a href="https://spark.apache.org/docs/latest/api/python/reference/pyspark.sql/api/pyspark.sql.Column.isNull.html">isNull</a>
+      ·
+      <a href="https://spark.apache.org/docs/latest/api/python/reference/pyspark.sql/api/pyspark.sql.DataFrameNaFunctions.html">na</a>
+      ·
+      <a href="https://spark.apache.org/docs/latest/api/python/reference/pyspark.sql/api/pyspark.sql.functions.coalesce.html">coalesce</a>
+      ·
+      <a href="https://spark.apache.org/docs/latest/api/python/reference/pyspark.sql/api/pyspark.sql.Column.eqNullSafe.html">eqNullSafe</a>
+    </p>
+
     <footer>
       Lessons:
       <a href="../lessons/0001-filter-select-cold.html">0001</a> ·
@@ -161,7 +194,9 @@ df.withColumn("rn", row_number().over(w)).filter(col("rn") == 1)</code></pre>
       <a href="../lessons/0004-pipeline-mix.html">0004</a> ·
       <a href="../lessons/0005-groupby-agg.html">0005</a> ·
       <a href="../lessons/0006-full-pipeline-mix.html">0006</a> ·
-      <a href="../lessons/0007-window-functions.html">0007</a>
+      <a href="../lessons/0007-window-functions.html">0007</a> ·
+      <a href="../lessons/0008-window-pipeline-mix.html">0008</a> ·
+      <a href="../lessons/0009-nulls.html">0009</a>
     </footer>
   </div>
 </body>

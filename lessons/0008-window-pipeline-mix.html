@@ -1,0 +1,222 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>0008 · window + pipeline mix</title>
+  <link rel="stylesheet" href="../assets/styles.css" />
+</head>
+<body>
+  <div class="wrap">
+    <nav class="crumbs">
+      <a href="0007-window-functions.html">← 0007</a> ·
+      <a href="../reference/dataframe-core-syntax.html">Reference</a> ·
+      <a href="../exercises/08_window_pipeline.py">Exercises</a>
+    </nav>
+    <header>
+      <p class="eyebrow">Lesson 0008 · integration (not new API)</p>
+      <h1>Window + pipeline mix</h1>
+      <p class="lede">Compose window with filter, join, and lag math — work tickets, not isolated toys.</p>
+    </header>
+
+    <div class="win">
+      <strong>Win:</strong> Finish <code>08_window_pipeline.py</code> cold-ish. Window sits mid-chain after join/filter.
+    </div>
+
+    <h2>0. Why this exists</h2>
+    <p>
+      You passed isolated window (0007). Fluency = <em>compose</em> it with filter/join without reopening docs.
+      Same pattern as <a href="0004-pipeline-mix.html">0004</a> / <a href="0006-full-pipeline-mix.html">0006</a>.
+    </p>
+
+    <h2>1. Toolbox (all you need)</h2>
+    <pre><code>from pyspark.sql import Window
+from pyspark.sql.functions import col, row_number, rank, dense_rank, lag, sum
+
+# 0001–0003
+df.filter(cond).join(right, "key", "inner")
+(col("a") &gt;= 100) &amp; (col("status") == "open")
+
+# 0007
+w = Window.partitionBy("region").orderBy(col("amount").desc(), col("order_id"))
+df.withColumn("rn", row_number().over(w)).filter(col("rn") &lt;= 2)
+df.withColumn("prev", lag("amount").over(Window.partitionBy("name").orderBy("day")))
+df.withColumn("delta", col("amount") - col("prev"))  # null - x → null
+df.withColumn("running", sum("amount").over(Window.partitionBy("region").orderBy("day")))</code></pre>
+    <p>Ref: <a href="../reference/dataframe-core-syntax.html">dataframe-core-syntax</a> ·
+      <a href="0006-full-pipeline-mix.html">0006</a> ·
+      <a href="0007-window-functions.html">0007</a>
+    </p>
+
+    <h2>2. Data for the drills</h2>
+    <pre><code>orders(order_id, cust_id, amount, status, day)
+  1 10 100 open   1
+  2 20 250 open   1
+  3 10  40 closed 2
+  4 99  80 open   2   ← orphan
+  5 20 150 closed 2
+  6 30 300 open   2
+  7 30  50 open   3
+  8 10 200 open   4
+  9 20 100 open   3
+
+customers(cust_id, name, region, tier)
+  10 Alice east  gold
+  20 Bob   west  silver
+  30 Carol east  gold
+  40 Dan   north bronze  ← no orders</code></pre>
+
+    <h2>3. Knowledge → each exercise</h2>
+
+    <h3>ex1 — open → join → row_number per region</h3>
+    <pre><code>w = Window.partitionBy("region").orderBy(col("amount").desc(), col("order_id"))
+(
+    orders.filter(col("status") == "open")
+          .join(customers, "cust_id", "inner")
+          .withColumn("rn", row_number().over(w))
+          .select("order_id", "name", "region", "amount", "rn")
+)
+# east: 6/300 rn1, 8/200 rn2, 1/100 rn3, 7/50 rn4
+# west: 2/250 rn1, 9/100 rn2</code></pre>
+
+    <h3>ex2 — top-1 open per region</h3>
+    <pre><code># same w as ex1, then filter rn == 1; drop rn from select
+# east Carol 300, west Bob 250</code></pre>
+
+    <h3>ex3 — lag amount per name (all statuses)</h3>
+    <pre><code>w = Window.partitionBy("name").orderBy("day")
+(
+    orders.join(customers, "cust_id", "inner")
+          .withColumn("prev", lag("amount").over(w))
+          .select("order_id", "name", "day", "amount", "prev")
+)
+# Alice: 100→null, 40→100, 200→40</code></pre>
+
+    <h3>ex4 — open running sum per region by day</h3>
+    <pre><code>w = Window.partitionBy("region").orderBy("day")
+(
+    orders.filter(col("status") == "open")
+          .join(customers, "cust_id", "inner")
+          .withColumn("running", sum("amount").over(w))
+          .select("order_id", "name", "region", "day", "amount", "running")
+)
+# east: 100 → 400 → 450 → 650</code></pre>
+
+    <h3>ex5 — top amount per tier (rank)</h3>
+    <pre><code>w = Window.partitionBy("tier").orderBy(col("amount").desc())
+(
+    orders.join(customers, "cust_id", "inner")
+          .withColumn("r", rank().over(w))
+          .filter(col("r") == 1)
+          .select("order_id", "name", "tier", "amount")
+)
+# gold Carol 300, silver Bob 250</code></pre>
+
+    <h3>ex6 — amount ≥ 100 → dense_rank per region</h3>
+    <pre><code>w = Window.partitionBy("region").orderBy(col("amount").desc())
+(
+    orders.filter(col("amount") &gt;= 100)
+          .join(customers, "cust_id", "inner")
+          .withColumn("d", dense_rank().over(w))
+          .select("order_id", "name", "region", "amount", "d")
+)
+# includes Bob closed 150; drops Carol open 50</code></pre>
+
+    <h3>ex7 — open → lag + delta per name</h3>
+    <pre><code>w = Window.partitionBy("name").orderBy("day")
+(
+    orders.filter(col("status") == "open")
+          .join(customers, "cust_id", "inner")
+          .withColumn("prev", lag("amount").over(w))
+          .withColumn("delta", col("amount") - col("prev"))
+          .select("order_id", "name", "day", "amount", "prev", "delta")
+)
+# Bob open: 250 then 100 → delta -150; first day delta null</code></pre>
+
+    <h3>ex8 — top-2 open per region</h3>
+    <pre><code># row_number like ex1, filter rn &lt;= 2
+# east 6+8, west 2+9</code></pre>
+
+    <h2>4. Order habits (work)</h2>
+    <ul>
+      <li>Filter status/amount <em>before</em> window when the peer set should ignore those rows.</li>
+      <li>Join for name/region/tier, then <code>partitionBy</code> business key.</li>
+      <li>Top-N: <code>row_number</code> + filter — not <code>groupBy</code> + max then rejoin (unless you need it).</li>
+      <li><code>amount - lag</code>: first row null; fine — filter nulls later if report needs.</li>
+    </ul>
+
+    <h2>5. Retrieval</h2>
+    <div id="q1"></div>
+    <div id="q2"></div>
+    <div id="q3"></div>
+
+    <h2>6. Cold write</h2>
+    <div id="drill1"></div>
+
+    <h2>7. Run</h2>
+    <pre><code>cd exercises
+../.venv/bin/python 08_window_pipeline.py</code></pre>
+    <p>
+      File: <code>exercises/08_window_pipeline.py</code> ·
+      Peek after try: <code>exercises/solutions/08_window_pipeline.py</code>
+    </p>
+
+    <div class="source">
+      <strong>Primary source:</strong> your
+      <a href="../reference/dataframe-core-syntax.html">core syntax sheet</a>
+      (Window section) — this lesson is retrieval. Fallback:
+      <a href="https://spark.apache.org/docs/latest/api/python/reference/pyspark.sql/api/pyspark.sql.Window.html">Window</a>,
+      <a href="https://spark.apache.org/docs/latest/api/python/reference/pyspark.sql/api/pyspark.sql.functions.lag.html">lag</a>.
+    </div>
+
+    <div class="ask">
+      FAIL? Paste got vs expected. Say which step broke (filter / join / WindowSpec / filter-after-rn).
+    </div>
+
+    <footer>
+      Prev: <a href="0007-window-functions.html">0007</a>
+      · Next: <a href="0009-nulls.html">0009 nulls</a>
+    </footer>
+  </div>
+  <script src="../assets/quiz.js"></script>
+  <script>
+    LessonUI.Quiz.mount("#q1", {
+      prompt: "Open-only top-1 amount per region. When do you filter status?",
+      options: [
+        { text: "Before the window so peers are open rows only", correct: true, why: "Closed rows must not compete for top open rank." },
+        { text: "After row_number, filter status on ranked frame", correct: false, why: "Closed can steal rn=1; open never wins that partition." },
+        { text: "Only inside partitionBy as a third key column", correct: false, why: "partitionBy does not drop rows; it splits peers." },
+        { text: "Never filter; rank ignores status by design always", correct: false, why: "Window sees whatever rows you pass it." },
+      ],
+    });
+    LessonUI.Quiz.mount("#q2", {
+      prompt: "delta = amount - lag(amount). First day for that name is…",
+      options: [
+        { text: "null, because lag has no prior peer row", correct: true, why: "lag returns null; amount - null is null in Spark." },
+        { text: "zero, Spark coerces missing lag to zero", correct: false, why: "No auto-zero; you must lit(0) yourself if wanted." },
+        { text: "amount, lag defaults to the same amount", correct: false, why: "lag default is null, not current value." },
+        { text: "error, subtraction forbids null left or right", correct: false, why: "Arithmetic with null yields null, not error." },
+      ],
+    });
+    LessonUI.Quiz.mount("#q3", {
+      prompt: "Top-2 open orders per region after join. Best pattern?",
+      options: [
+        { text: "row_number over region, filter rn less equal 2", correct: true, why: "Standard top-N; unique ranks, then keep first two." },
+        { text: "groupBy region, max amount twice, then rejoin", correct: false, why: "Painful for N>1; misses second place cleanly." },
+        { text: "rank over region, filter rank equals two only", correct: false, why: "That keeps second place only, drops first; ties messy." },
+        { text: "dense_rank, filter dense_rank greater than two", correct: false, why: "That keeps everyone except top two bands." },
+      ],
+    });
+    LessonUI.Drill.mount("#drill1", {
+      prompt: "open → inner join → rn per region amount desc order_id → keep rn==1",
+      accept: [
+        'orders.filter(col("status") == "open").join(customers, "cust_id", "inner").withColumn("rn", row_number().over(Window.partitionBy("region").orderBy(col("amount").desc(), col("order_id")))).filter(col("rn") == 1)',
+        'orders.filter(col("status")=="open").join(customers,"cust_id","inner").withColumn("rn",row_number().over(Window.partitionBy("region").orderBy(col("amount").desc(),col("order_id")))).filter(col("rn")==1)',
+        "orders.filter(col('status') == 'open').join(customers, 'cust_id', 'inner').withColumn('rn', row_number().over(Window.partitionBy('region').orderBy(col('amount').desc(), col('order_id')))).filter(col('rn') == 1)",
+        'orders.filter(col("status") == "open").join(customers, "cust_id").withColumn("rn", row_number().over(Window.partitionBy("region").orderBy(col("amount").desc(), col("order_id")))).filter(col("rn") == 1)',
+      ],
+      solution: 'orders.filter(col("status") == "open").join(customers, "cust_id", "inner").withColumn("rn", row_number().over(Window.partitionBy("region").orderBy(col("amount").desc(), col("order_id")))).filter(col("rn") == 1)',
+    });
+  </script>
+</body>
+</html>

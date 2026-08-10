@@ -29,6 +29,8 @@ cd exercises
 | `05_groupby_agg.py` | groupBy, count/sum/avg/max, multi-key, having, join+agg | [0005](../lessons/0005-groupby-agg.html) |
 | `06_full_pipeline.py` | mix 0001–0005 into full work-style chains | [0006 mix](../lessons/0006-full-pipeline-mix.html) |
 | `07_window.py` | partitionBy/orderBy, rank, lag/lead, running sum, top-N | [0007](../lessons/0007-window-functions.html) |
+| `08_window_pipeline.py` | mix 0001–0007: filter/join + window top-N / lag / running | [0008 mix](../lessons/0008-window-pipeline-mix.html) |
+| `09_nulls.py` | isNull / isNotNull, na.drop, na.fill, coalesce, when | [0009](../lessons/0009-nulls.html) |
 | `solutions/` | reference answers — after a real try | |
 
 Row order does not matter. Column **names and order** do.
