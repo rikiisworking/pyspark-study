@@ -27,3 +27,4 @@
 - Mix 0014: parse early + alias flat; join user_id↔cust_id; fill before sum; null amount out of top-N
 - After nested track: SQL interop (0015) — mission “know when SQL is fine”
 - SQL interop traps: createOrReplaceTempView preferred; global_temp.qualify; spark.sql → DF; selectExpr no view
+- After SQL isolated PASS: mix 0016 — SQL↔DF both directions; re-hammer selectExpr; fill-before-sum; left+coalesce

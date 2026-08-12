@@ -50,6 +50,7 @@ cd exercises
 | 8 | nested + JSON | [0013](lessons/0013-nested-json.html) | `13_nested_json.py` |
 | 8b | nested + pipeline mix | [0014](lessons/0014-nested-pipeline-mix.html) | `14_nested_pipeline.py` |
 | 9 | Spark SQL interop | [0015](lessons/0015-sql-interop.html) | `15_sql_interop.py` |
+| 9b | SQL + pipeline mix | [0016](lessons/0016-sql-pipeline-mix.html) | `16_sql_pipeline.py` |
 
 ## Layout
 

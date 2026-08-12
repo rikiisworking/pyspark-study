@@ -1,0 +1,202 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>0016 · SQL + pipeline mix</title>
+  <link rel="stylesheet" href="../assets/styles.css" />
+</head>
+<body>
+  <div class="wrap">
+    <nav class="crumbs">
+      <a href="0015-sql-interop.html">← 0015</a> ·
+      <a href="../reference/dataframe-core-syntax.html">Reference</a> ·
+      <a href="../exercises/16_sql_pipeline.py">Exercises</a>
+    </nav>
+    <header>
+      <p class="eyebrow">Lesson 0016 · integration (not new API)</p>
+      <h1>SQL interop + pipeline mix</h1>
+      <p class="lede">Register → <code>spark.sql</code> → keep chaining DF — join, fill, window, parquet mid-ticket.</p>
+    </header>
+
+    <div class="win">
+      <strong>Win:</strong> Finish <code>16_sql_pipeline.py</code> cold-ish. SQL is a step, not a separate world. Re-hit <code>selectExpr</code>.
+    </div>
+
+    <h2>0. Why this exists</h2>
+    <p>
+      You passed isolated SQL interop (<a href="0015-sql-interop.html">0015</a>). Storage strength = interleave views with filter, join, fill, groupBy, window, parquet.
+      Same pattern as <a href="0010-nulls-pipeline-mix.html">0010</a> / <a href="0014-nested-pipeline-mix.html">0014</a>.
+      Also closes the <code>selectExpr</code> gap from 0015 (ex4 used <code>withColumn</code> instead).
+    </p>
+
+    <h2>1. Toolbox (all you need)</h2>
+    <pre><code>from pyspark.sql import Window
+from pyspark.sql.functions import col, coalesce, lit, sum, row_number
+
+# bridge
+df.createOrReplaceTempView("orders")
+spark.sql("SELECT … FROM orders …")          # → DataFrame
+df.selectExpr("order_id", "amount * 2 AS double_amt")
+
+# you already know these after SQL
+.filter(col("region") == "east")
+.withColumn("region", coalesce(col("region"), lit("unknown")))
+.na.fill({"amount": 0})
+.groupBy("region").agg(sum("amount").alias("total"))
+Window.partitionBy("name").orderBy(col("amount").desc(), col("order_id"))
+.write.mode("overwrite").parquet(path)
+spark.read.parquet(path)</code></pre>
+    <p>
+      Ref: <a href="../reference/dataframe-core-syntax.html">dataframe-core-syntax</a> ·
+      <a href="0015-sql-interop.html">0015</a>
+    </p>
+
+    <h2>2. Data for the drills</h2>
+    <pre><code>orders(order_id, cust_id, amount, status)
+  1  10  100  open
+  2  20   50  open
+  3  10  200  closed
+  4  30  150  open
+  5  99   80  open     ← orphan (no customer)
+  6  20  null open     ← null amount
+
+customers(cust_id, name, region)
+  10 Alice east
+  20 Bob   null        ← null region
+  30 Carol east
+  40 Dan   north       ← no orders</code></pre>
+
+    <h2>3. Knowledge → each exercise</h2>
+
+    <h3>ex1 — SQL open → selectExpr double</h3>
+    <pre><code>orders.createOrReplaceTempView("orders")
+(
+  spark.sql("SELECT order_id, amount FROM orders WHERE status = 'open'")
+       .selectExpr("order_id", "amount", "amount * 2 AS double_amt")
+)
+# null amount → null double_amt (row 6)</code></pre>
+
+    <h3>ex2 — SQL join → DF filter east</h3>
+    <pre><code># register both, INNER JOIN all, then .filter(col("region") == "east")
+# (1 Alice 100 east), (3 Alice 200 east), (4 Carol 150 east)</code></pre>
+
+    <h3>ex3 — SQL sum → DF having-style filter</h3>
+    <pre><code># SUM(amount) by status (SQL skips nulls in SUM)
+# open = 100+50+150+80 = 380; closed = 200
+# then .filter(col("total") > 250) → open only</code></pre>
+
+    <h3>ex4 — DF open first → SQL join</h3>
+    <pre><code>orders.filter(col("status") == "open").createOrReplaceTempView("open_orders")
+customers.createOrReplaceTempView("customers")
+# INNER JOIN → drops orphan 5; keeps Bob null amount
+# (1 Alice 100), (2 Bob 50), (4 Carol 150), (6 Bob null)</code></pre>
+
+    <h3>ex5 — SQL left join → coalesce region</h3>
+    <pre><code># open LEFT JOIN customers, then coalesce(region, "unknown")
+# orphan 5 → name null, region unknown
+# Bob null region → unknown</code></pre>
+
+    <h3>ex6 — SQL join → window top per name</h3>
+    <pre><code># SQL: open AND amount IS NOT NULL, inner join
+# Window.partitionBy("name").orderBy(amount desc, order_id)
+# rn == 1 → Alice 1/100, Bob 2/50, Carol 4/150</code></pre>
+
+    <h3>ex7 — SQL open join → fill → sum by region</h3>
+    <pre><code># fill amount 0 so Bob null becomes 0; coalesce region unknown
+# east: 100+150 = 250; unknown: 50+0 = 50
+# orphan dropped by INNER</code></pre>
+
+    <h3>ex8 — SQL open → parquet roundtrip</h3>
+    <pre><code># SELECT order_id, cust_id, amount WHERE open
+# write.mode("overwrite").parquet(path); spark.read.parquet(path)
+# includes orphan 5 and null amount on 6</code></pre>
+
+    <h2>4. Traps (work)</h2>
+    <ul>
+      <li><strong>Either direction:</strong> DF → register → SQL, or SQL → DF chain. Both return DataFrames.</li>
+      <li><code>selectExpr</code> is the no-view bridge — prefer it over <code>withColumn</code> when the drill says so.</li>
+      <li>SQL <code>SUM</code> skips nulls; DF fill-before-sum if null must count as 0 (ex7).</li>
+      <li>View name ≠ Python variable. Filter DF first, then <code>createOrReplaceTempView("open_orders")</code>.</li>
+      <li>Left join keeps orphans; inner drops them. Coalesce after left if region may be null.</li>
+      <li>Top-N: drop null amounts in SQL (<code>IS NOT NULL</code>) before window if null must not win.</li>
+    </ul>
+
+    <h2>5. Retrieval</h2>
+    <div id="q1"></div>
+    <div id="q2"></div>
+    <div id="q3"></div>
+
+    <h2>6. Cold write</h2>
+    <div id="drill1"></div>
+
+    <h2>7. Run</h2>
+    <pre><code>cd exercises
+../.venv/bin/python 16_sql_pipeline.py</code></pre>
+    <p>
+      File: <code>exercises/16_sql_pipeline.py</code> ·
+      Peek after try: <code>exercises/solutions/16_sql_pipeline.py</code>
+    </p>
+
+    <div class="source">
+      <strong>Primary source:</strong>
+      <a href="https://spark.apache.org/docs/latest/sql-getting-started.html#running-sql-queries-programmatically">Running SQL queries programmatically</a>
+      ·
+      <a href="https://spark.apache.org/docs/latest/api/python/reference/pyspark.sql/api/pyspark.sql.DataFrame.selectExpr.html">selectExpr</a>
+      · compose with
+      <a href="https://spark.apache.org/docs/latest/api/python/reference/pyspark.sql/api/pyspark.sql.DataFrame.join.html">join</a>
+      ·
+      <a href="https://spark.apache.org/docs/latest/api/python/reference/pyspark.sql/api/pyspark.sql.Window.html">Window</a>
+    </div>
+
+    <div class="ask">
+      FAIL? Paste got vs expected. Name step: view name, SQL quote, join type, selectExpr alias, fill order, window rank, or write.
+      Ask the agent anything unclear — teacher is here.
+    </div>
+
+    <footer>
+      Prev: <a href="0015-sql-interop.html">0015</a>
+      · Next after PASS: mission stretch / new scope (optional)
+    </footer>
+  </div>
+  <script src="../assets/quiz.js"></script>
+  <script>
+    LessonUI.Quiz.mount("#q1", {
+      prompt: "SQL join done; need only region east next. Do…",
+      options: [
+        { text: "Filter the DataFrame from spark.sql", correct: true, why: "sql returns a DF — chain .filter as usual." },
+        { text: "Re-register and drop the temp view", correct: false, why: "Dropping does not filter rows." },
+        { text: "Collect to list then loop in Python", correct: false, why: "Leaves the cluster; stay lazy on DF." },
+        { text: "Write parquet then ignore the path", correct: false, why: "I/O is not a filter step." },
+      ],
+    });
+    LessonUI.Quiz.mount("#q2", {
+      prompt: "Double amount without a temp view. Prefer…",
+      options: [
+        { text: "selectExpr amount times two alias", correct: true, why: "SQL fragment on one DF; no view needed." },
+        { text: "createTempView then full table scan", correct: false, why: "Works but heavier than selectExpr." },
+        { text: "global_temp only for one column math", correct: false, why: "Global is for app-scoped sharing." },
+        { text: "na.fill then groupBy without sum", correct: false, why: "Wrong tools for a per-row double." },
+      ],
+    });
+    LessonUI.Quiz.mount("#q3", {
+      prompt: "Open rows already filtered on a DF. Next SQL join?",
+      options: [
+        { text: "createOrReplaceTempView then join SQL", correct: true, why: "Register the filtered DF under a view name." },
+        { text: "spark.sql on the Python variable name", correct: false, why: "SQL sees catalog names, not Python ids." },
+        { text: "dropGlobalTempView before every select", correct: false, why: "Unrelated; local views are enough here." },
+        { text: "partitionBy write then forget the join", correct: false, why: "I/O is not how you join dimensions." },
+      ],
+    });
+    LessonUI.Drill.mount("#drill1", {
+      prompt: "orders.createOrReplaceTempView(\"orders\"); spark.sql open order_id,amount; then selectExpr amount*2 AS double_amt",
+      accept: [
+        'orders.createOrReplaceTempView("orders"); spark.sql("SELECT order_id, amount FROM orders WHERE status = \'open\'").selectExpr("order_id", "amount", "amount * 2 AS double_amt")',
+        "orders.createOrReplaceTempView('orders'); spark.sql(\"SELECT order_id, amount FROM orders WHERE status = 'open'\").selectExpr('order_id', 'amount', 'amount * 2 AS double_amt')",
+        'orders.createOrReplaceTempView("orders")\nspark.sql("SELECT order_id, amount FROM orders WHERE status = \'open\'").selectExpr("order_id", "amount", "amount * 2 AS double_amt")',
+      ],
+      solution: 'orders.createOrReplaceTempView("orders")\nspark.sql("SELECT order_id, amount FROM orders WHERE status = \'open\'").selectExpr("order_id", "amount", "amount * 2 AS double_amt")',
+    });
+  </script>
+</body>
+</html>

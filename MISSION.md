@@ -30,6 +30,7 @@ You already own/write Spark pipelines at work, but cold-writing DataFrame API tr
 8. nested + JSON (struct dots, from_json, explode) — done
 8b. nested/JSON + pipeline mix — done
 9. Spark SQL interop (temp views) — done
+9b. SQL interop + pipeline mix — in progress
 
 ## Out of scope
 - Cluster ops, YARN/K8s, cost tuning (until syntax solid)

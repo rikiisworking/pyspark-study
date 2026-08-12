@@ -37,6 +37,7 @@ cd exercises
 | `13_nested_json.py` | struct dots, from_json, get_json_object, explode | [0013](../lessons/0013-nested-json.html) |
 | `14_nested_pipeline.py` | nested/JSON + join/fill/window/I/O mix | [0014 mix](../lessons/0014-nested-pipeline-mix.html) |
 | `15_sql_interop.py` | temp views, spark.sql, selectExpr, global_temp | [0015](../lessons/0015-sql-interop.html) |
+| `16_sql_pipeline.py` | SQL interop + join/fill/window/I/O mix | [0016 mix](../lessons/0016-sql-pipeline-mix.html) |
 | `solutions/` | reference answers — after a real try | |
 
 Row order does not matter. Column **names and order** do.
