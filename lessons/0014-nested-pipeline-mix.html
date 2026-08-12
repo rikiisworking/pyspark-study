@@ -1,0 +1,208 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>0014 · nested + pipeline mix</title>
+  <link rel="stylesheet" href="../assets/styles.css" />
+</head>
+<body>
+  <div class="wrap">
+    <nav class="crumbs">
+      <a href="0013-nested-json.html">← 0013</a> ·
+      <a href="../reference/dataframe-core-syntax.html">Reference</a> ·
+      <a href="../exercises/14_nested_pipeline.py">Exercises</a>
+    </nav>
+    <header>
+      <p class="eyebrow">Lesson 0014 · integration (not new API)</p>
+      <h1>Nested/JSON + pipeline mix</h1>
+      <p class="lede">Parse once, then join / explode / fill / window / write — work-ticket grain.</p>
+    </header>
+
+    <div class="win">
+      <strong>Win:</strong> Finish <code>14_nested_pipeline.py</code> cold-ish. Nested tools mid-chain, not as isolated toys.
+    </div>
+
+    <h2>0. Why this exists</h2>
+    <p>
+      You passed isolated nested/JSON (<a href="0013-nested-json.html">0013</a>). Storage strength = interleave with filter, join, fill, groupBy, window, parquet.
+      Same pattern as <a href="0010-nulls-pipeline-mix.html">0010</a> / <a href="0012-capstone-mix.html">0012</a>.
+    </p>
+
+    <h2>1. Toolbox (all you need)</h2>
+    <pre><code>from pyspark.sql import Window
+from pyspark.sql.functions import (
+    col, from_json, explode, explode_outer,
+    coalesce, lit, sum, row_number,
+)
+
+schema = "user_id INT, amount INT, status STRING, tags ARRAY&lt;STRING&gt;"
+
+# parse early, then treat fields as normal columns
+df.withColumn("p", from_json(col("raw"), schema))
+df.select("event_id", col("p.user_id").alias("user_id"), col("p.amount").alias("amount"))
+
+# join dim table on parsed key
+.join(customers, col("user_id") == col("cust_id"), "inner")  # or "left"
+
+# arrays
+explode(col("p.tags"))
+explode_outer(col("p.tags"))
+
+# nulls / agg / window / I/O (you already know these)
+.na.fill({"amount": 0})
+.groupBy("name").agg(sum("amount").alias("total"))
+Window.partitionBy("user_id").orderBy(col("amount").desc(), col("event_id"))
+.write.mode("overwrite").parquet(path)
+spark.read.parquet(path)</code></pre>
+    <p>
+      Ref: <a href="../reference/dataframe-core-syntax.html">dataframe-core-syntax</a> ·
+      <a href="0013-nested-json.html">0013</a>
+    </p>
+
+    <h2>2. Data for the drills</h2>
+    <pre><code>events(event_id, raw JSON)
+  1 user 10 amount 100 open   tags [a,b]
+  2 user 20 amount  50 open   tags [x]
+  3 user 10 amount 200 closed tags []
+  4 user 99 amount  80 open   tags [z]   ← orphan
+  5 user 30 amount 300 open   tags [y]
+  6 user 20 amount 150 closed tags [x]
+  7 user 10 amount null open  tags [a]
+
+customers(cust_id, name, region)
+  10 Alice east
+  20 Bob   null
+  30 Carol east
+  40 Dan   north</code></pre>
+
+    <h2>3. Knowledge → each exercise</h2>
+
+    <h3>ex1 — parse + project</h3>
+    <pre><code>(
+    events.withColumn("p", from_json(col("raw"), schema))
+          .select(
+              "event_id",
+              col("p.user_id").alias("user_id"),
+              col("p.amount").alias("amount"),
+              col("p.status").alias("status"),
+          )
+)
+# 7 rows; event 7 amount null</code></pre>
+
+    <h3>ex2 — open → inner join name</h3>
+    <pre><code># parse, filter p.status == "open", join on p.user_id == cust_id
+# drops orphan 4; keeps null amount on event 7
+# (1 Alice 100), (2 Bob 50), (5 Carol 300), (7 Alice null)</code></pre>
+
+    <h3>ex3 — explode tags, keep "x"</h3>
+    <pre><code># explode then filter tag == "x"
+# (2, 20, x), (6, 20, x)</code></pre>
+
+    <h3>ex4 — explode_outer + left join</h3>
+    <pre><code># empty tags on event 3 → one row, tag null, name Alice
+# orphan event 4 → name null, tag z</code></pre>
+
+    <h3>ex5 — fill → open → join → sum by name</h3>
+    <pre><code># fill amount 0 first so open null (event 7) becomes 0
+# Alice 100, Bob 50, Carol 300  (orphan open dropped by inner)</code></pre>
+
+    <h3>ex6 — top open amount per user</h3>
+    <pre><code>w = Window.partitionBy("user_id").orderBy(col("amount").desc(), col("event_id"))
+# open + amount not null → rn == 1 → inner join name
+# Alice event 1 (100), Bob 2 (50), Carol 5 (300)</code></pre>
+
+    <h3>ex7 — all rows, sum by region</h3>
+    <pre><code># fill amount 0, inner join, coalesce(region, "unknown"), groupBy region
+# Alice+Carol east: 100+200+0+300 = 600
+# Bob unknown: 50+150 = 200</code></pre>
+
+    <h3>ex8 — open → parquet → read</h3>
+    <pre><code># filter open after parse, write overwrite parquet, read
+# includes orphan 4 and null amount on 7</code></pre>
+
+    <h2>4. Traps (work)</h2>
+    <ul>
+      <li>Parse early, then <strong>alias flat columns</strong> before join/window — fewer <code>p.</code> headaches.</li>
+      <li>Join key: <code>user_id</code> (parsed) vs <code>cust_id</code> (dim). Column join, not string equality of names alone if names differ.</li>
+      <li><code>explode</code> before join multiplies dim rows — usually explode then join, or join then explode deliberately.</li>
+      <li>Fill <em>before</em> sum if null amounts should count as 0 (ex5, ex7).</li>
+      <li>Top-N: drop null amounts before window if null must not win (ex6).</li>
+    </ul>
+
+    <h2>5. Retrieval</h2>
+    <div id="q1"></div>
+    <div id="q2"></div>
+    <div id="q3"></div>
+
+    <h2>6. Cold write</h2>
+    <div id="drill1"></div>
+
+    <h2>7. Run</h2>
+    <pre><code>cd exercises
+../.venv/bin/python 14_nested_pipeline.py</code></pre>
+    <p>
+      File: <code>exercises/14_nested_pipeline.py</code> ·
+      Peek after try: <code>exercises/solutions/14_nested_pipeline.py</code>
+    </p>
+
+    <div class="source">
+      <strong>Primary source:</strong>
+      <a href="https://spark.apache.org/docs/latest/api/python/reference/pyspark.sql/api/pyspark.sql.functions.from_json.html">from_json</a>
+      · compose with
+      <a href="https://spark.apache.org/docs/latest/api/python/reference/pyspark.sql/api/pyspark.sql.DataFrame.join.html">join</a>
+      ·
+      <a href="https://spark.apache.org/docs/latest/api/python/reference/pyspark.sql/api/pyspark.sql.Window.html">Window</a>
+    </div>
+
+    <div class="ask">
+      FAIL? Paste got vs expected. Name step: parse, explode grain, join type, fill order, window rank, or write.
+      Ask the agent anything unclear — teacher is here.
+    </div>
+
+    <footer>
+      Prev: <a href="0013-nested-json.html">0013</a>
+      · Next after PASS: Spark SQL interop (temp views)
+    </footer>
+  </div>
+  <script src="../assets/quiz.js"></script>
+  <script>
+    LessonUI.Quiz.mount("#q1", {
+      prompt: "JSON events + customer dim. Best first step?",
+      options: [
+        { text: "from_json then join on parsed key", correct: true, why: "Need typed user_id before join." },
+        { text: "join raw string to cust_id first", correct: false, why: "Types and keys will not match." },
+        { text: "explode tags before any parse step", correct: false, why: "tags still inside JSON text." },
+        { text: "write parquet first, skip the parse", correct: false, why: "Files still hold JSON strings." },
+      ],
+    });
+    LessonUI.Quiz.mount("#q2", {
+      prompt: "Empty tags [], need parent event kept with null tag?",
+      options: [
+        { text: "explode_outer on the tags array", correct: true, why: "Outer keeps parent; tag null." },
+        { text: "explode only; empty arrays stay", correct: false, why: "explode drops empty arrays." },
+        { text: "get_json_object on tags path only", correct: false, why: "Returns string, not rows." },
+        { text: "groupBy tags then count star", correct: false, why: "Does not flatten arrays." },
+      ],
+    });
+    LessonUI.Quiz.mount("#q3", {
+      prompt: "Open events, null amount must not win top-N. Do…",
+      options: [
+        { text: "Filter amount not null before window", correct: true, why: "Rank only real spends." },
+        { text: "Fill amount zero after rn equals one", correct: false, why: "Too late; ranking already ran." },
+        { text: "Use explode_outer instead of rank", correct: false, why: "Wrong tool for top-N." },
+        { text: "Left join customers before any parse", correct: false, why: "No key until parse." },
+      ],
+    });
+    LessonUI.Drill.mount("#drill1", {
+      prompt: "from_json raw, filter open, join customers on user_id==cust_id, select event_id name amount",
+      accept: [
+        'events.withColumn("p", from_json(col("raw"), schema)).filter(col("p.status") == "open").join(customers, col("p.user_id") == col("cust_id"), "inner").select("event_id", "name", col("p.amount").alias("amount"))',
+        "events.withColumn('p', from_json(col('raw'), schema)).filter(col('p.status') == 'open').join(customers, col('p.user_id') == col('cust_id'), 'inner').select('event_id', 'name', col('p.amount').alias('amount'))",
+        'events.withColumn("p", from_json(col("raw"), schema)).filter(col("p.status")=="open").join(customers, col("p.user_id")==col("cust_id"), "inner").select("event_id", "name", col("p.amount").alias("amount"))',
+      ],
+      solution: 'events.withColumn("p", from_json(col("raw"), schema)).filter(col("p.status") == "open").join(customers, col("p.user_id") == col("cust_id"), "inner").select("event_id", "name", col("p.amount").alias("amount"))',
+    });
+  </script>
+</body>
+</html>

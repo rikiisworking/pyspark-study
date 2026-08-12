@@ -35,6 +35,7 @@ cd exercises
 | `11_read_write.py` | parquet/csv read write, modes, partitionBy | [0011](../lessons/0011-read-write.html) |
 | `12_capstone_mix.py` | full track + I/O interleaved | [0012 mix](../lessons/0012-capstone-mix.html) |
 | `13_nested_json.py` | struct dots, from_json, get_json_object, explode | [0013](../lessons/0013-nested-json.html) |
+| `14_nested_pipeline.py` | nested/JSON + join/fill/window/I/O mix | [0014 mix](../lessons/0014-nested-pipeline-mix.html) |
 | `solutions/` | reference answers — after a real try | |
 
 Row order does not matter. Column **names and order** do.

@@ -24,3 +24,4 @@
 - Capstone 0012: re-hammer write partitionBy + filter-after-CSV-read (gaps from 0011 PASS)
 - After core+capstone: nested/JSON (0013) — work payloads; then optional mix; then Spark SQL interop
 - Nested traps: from_json needs schema; get_json_object → string; explode drops empty; explode_outer keeps
+- Mix 0014: parse early + alias flat; join user_id↔cust_id; fill before sum; null amount out of top-N
