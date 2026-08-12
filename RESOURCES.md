@@ -28,6 +28,10 @@
   na.fill / na.drop (aliases fillna / dropna). Use for: bulk null handling.
 - [functions.coalesce](https://spark.apache.org/docs/latest/api/python/reference/pyspark.sql/api/pyspark.sql.functions.coalesce.html)
   First non-null column. Use for: default values mid-pipeline.
+- [DataFrameWriter](https://spark.apache.org/docs/latest/api/python/reference/pyspark.sql/api/pyspark.sql.DataFrameWriter.html) · [DataFrameReader](https://spark.apache.org/docs/latest/api/python/reference/pyspark.sql/api/pyspark.sql.DataFrameReader.html) · [Writer.mode](https://spark.apache.org/docs/latest/api/python/reference/pyspark.sql/api/pyspark.sql.DataFrameWriter.mode.html)
+  Save/load API + overwrite/append/ignore/error. Use for: lesson 0011.
+- [Parquet Files](https://spark.apache.org/docs/latest/sql-data-sources-parquet.html) · [CSV Files](https://spark.apache.org/docs/latest/sql-data-sources-csv.html) · [Generic load/save](https://spark.apache.org/docs/latest/sql-data-sources-load-save-functions.html)
+  Official data source guides. Use for: format options, partition discovery.
 
 ## Wisdom (Communities)
 

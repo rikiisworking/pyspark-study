@@ -32,6 +32,8 @@ cd exercises
 | `08_window_pipeline.py` | mix 0001–0007: filter/join + window top-N / lag / running | [0008 mix](../lessons/0008-window-pipeline-mix.html) |
 | `09_nulls.py` | isNull / isNotNull, na.drop, na.fill, coalesce, when | [0009](../lessons/0009-nulls.html) |
 | `10_nulls_pipeline.py` | nulls + filter/join/groupBy mix | [0010 mix](../lessons/0010-nulls-pipeline-mix.html) |
+| `11_read_write.py` | parquet/csv read write, modes, partitionBy | [0011](../lessons/0011-read-write.html) |
+| `12_capstone_mix.py` | full track + I/O interleaved | [0012 mix](../lessons/0012-capstone-mix.html) |
 | `solutions/` | reference answers — after a real try | |
 
 Row order does not matter. Column **names and order** do.

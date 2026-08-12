@@ -1,0 +1,217 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>0011 · read / write</title>
+  <link rel="stylesheet" href="../assets/styles.css" />
+</head>
+<body>
+  <div class="wrap">
+    <nav class="crumbs">
+      <a href="0010-nulls-pipeline-mix.html">← 0010</a> ·
+      <a href="../reference/dataframe-core-syntax.html">Reference</a> ·
+      <a href="../exercises/11_read_write.py">Exercises</a>
+    </nav>
+    <header>
+      <p class="eyebrow">Lesson 0011 · DataFrame API</p>
+      <h1>Read / write</h1>
+      <p class="lede">Load and save parquet and CSV — the edges of every work pipeline.</p>
+    </header>
+
+    <div class="win">
+      <strong>Win:</strong> Cold-write <code>write.mode(...).parquet/csv</code>, <code>spark.read…</code>, header options, append vs overwrite, and <code>partitionBy</code>.
+    </div>
+
+    <h2>0. Map: knowledge → exercise</h2>
+    <pre><code>ex1  parquet overwrite → read
+ex2  csv header + inferSchema roundtrip
+ex3  filter open → parquet → read
+ex4  partitionBy region → read east
+ex5  overwrite then append (rows double)
+ex6  overwrite open, then overwrite closed (only closed left)
+ex7  amount ≥ 100 → parquet → select
+ex8  csv roundtrip → filter open</code></pre>
+
+    <h2>1. Toy data (same as drills)</h2>
+    <pre><code>orders
+  order_id | region | amount | status
+         1 | east   |    100 | open
+         2 | west   |     50 | open
+         3 | east   |    200 | closed
+         4 | west   |    150 | open</code></pre>
+
+    <h2>2. Mental model</h2>
+    <p>
+      Transforms are lazy. <strong>Write is an action</strong> — it runs the plan and lands files.
+      Read builds a new DataFrame from those files (or from object storage at work).
+    </p>
+    <pre><code># write
+df.write.mode("overwrite").parquet(path)
+df.write.mode("overwrite").option("header", True).csv(path)
+df.write.mode("overwrite").partitionBy("region").parquet(path)
+
+# read
+spark.read.parquet(path)
+spark.read.option("header", True).option("inferSchema", True).csv(path)
+
+# same idea, format/save style
+df.write.format("parquet").mode("overwrite").save(path)
+spark.read.format("parquet").load(path)</code></pre>
+    <p>
+      <strong>Modes</strong> (when path/table already exists):
+      <code>overwrite</code> replace ·
+      <code>append</code> add rows ·
+      <code>ignore</code> no-op ·
+      <code>error</code> / <code>errorifexists</code> throw.
+      Docs:
+      <a href="https://spark.apache.org/docs/latest/api/python/reference/pyspark.sql/api/pyspark.sql.DataFrameWriter.mode.html">Writer.mode</a> ·
+      <a href="https://spark.apache.org/docs/latest/api/python/reference/pyspark.sql/api/pyspark.sql.DataFrameWriter.html">DataFrameWriter</a> ·
+      <a href="https://spark.apache.org/docs/latest/api/python/reference/pyspark.sql/api/pyspark.sql.DataFrameReader.html">DataFrameReader</a> ·
+      <a href="https://spark.apache.org/docs/latest/sql-data-sources-parquet.html">Parquet guide</a> ·
+      <a href="https://spark.apache.org/docs/latest/sql-data-sources-csv.html">CSV guide</a>
+    </p>
+
+    <h2>3. Core patterns (solution kit)</h2>
+
+    <h3>ex1 — parquet roundtrip</h3>
+    <pre><code>orders.write.mode("overwrite").parquet(path)
+spark.read.parquet(path)</code></pre>
+
+    <h3>ex2 — CSV with header</h3>
+    <pre><code>orders.write.mode("overwrite").option("header", True).csv(path)
+(
+    spark.read
+         .option("header", True)
+         .option("inferSchema", True)
+         .csv(path)
+)
+# without inferSchema, numbers often come back as strings</code></pre>
+
+    <h3>ex3 — filter then write</h3>
+    <pre><code>(
+    orders.filter(col("status") == "open")
+          .write.mode("overwrite")
+          .parquet(path)
+)
+spark.read.parquet(path)
+# ids 1, 2, 4</code></pre>
+
+    <h3>ex4 — partitionBy region</h3>
+    <pre><code>orders.write.mode("overwrite").partitionBy("region").parquet(path)
+(
+    spark.read.parquet(path)
+         .filter(col("region") == "east")
+         .select("order_id", "region", "amount", "status")
+)
+# layout on disk: path/region=east/…  path/region=west/…
+# select: partition cols may land at end of schema — pin order</code></pre>
+
+    <h3>ex5 — append doubles rows</h3>
+    <pre><code>orders.write.mode("overwrite").parquet(path)
+orders.write.mode("append").parquet(path)
+spark.read.parquet(path)
+# 4 rows × 2 = 8</code></pre>
+
+    <h3>ex6 — overwrite replaces path</h3>
+    <pre><code># first write open, then overwrite with closed only
+# read → only order_id 3</code></pre>
+
+    <h3>ex7 — filter write select</h3>
+    <pre><code>(
+    orders.filter(col("amount") &gt;= 100)
+          .write.mode("overwrite")
+          .parquet(path)
+)
+spark.read.parquet(path).select("order_id", "amount")</code></pre>
+
+    <h3>ex8 — CSV then filter</h3>
+    <pre><code># write full CSV header; read header+inferSchema; filter open
+# same open set as ex3</code></pre>
+
+    <h2>4. Traps (work)</h2>
+    <ul>
+      <li>Path is a <em>directory</em> of part files — not one <code>.csv</code> blob (unless you force single partition).</li>
+      <li>CSV without <code>header</code>/<code>inferSchema</code> (or an explicit schema) is painful at work.</li>
+      <li><code>append</code> stacks files; duplicates are your problem. Prefer overwrite + full rebuild when unsure.</li>
+      <li><code>partitionBy</code> is directory layout for pruning — not the same as window <code>partitionBy</code>.</li>
+      <li>Default write mode is <code>error</code> if path exists — habit: always set <code>mode</code> deliberately.</li>
+    </ul>
+
+    <h2>5. Retrieval</h2>
+    <div id="q1"></div>
+    <div id="q2"></div>
+    <div id="q3"></div>
+
+    <h2>6. Cold write</h2>
+    <div id="drill1"></div>
+
+    <h2>7. Run</h2>
+    <pre><code>cd exercises
+../.venv/bin/python 11_read_write.py</code></pre>
+    <p>
+      File: <code>exercises/11_read_write.py</code> ·
+      Peek after try: <code>exercises/solutions/11_read_write.py</code>
+    </p>
+
+    <div class="source">
+      <strong>Primary source:</strong>
+      <a href="https://spark.apache.org/docs/latest/api/python/reference/pyspark.sql/api/pyspark.sql.DataFrameWriter.html">DataFrameWriter</a>
+      ·
+      <a href="https://spark.apache.org/docs/latest/api/python/reference/pyspark.sql/api/pyspark.sql.DataFrameReader.html">DataFrameReader</a>
+      · modes:
+      <a href="https://spark.apache.org/docs/latest/api/python/reference/pyspark.sql/api/pyspark.sql.DataFrameWriter.mode.html">mode</a>
+    </div>
+
+    <div class="ask">
+      FAIL? Paste got vs expected. Say which step: mode, format, header/inferSchema, partitionBy, or filter-before-write.
+    </div>
+
+    <footer>
+      Prev: <a href="0010-nulls-pipeline-mix.html">0010</a>
+      · Next: <a href="0012-capstone-mix.html">0012 capstone</a>
+    </footer>
+  </div>
+  <script src="../assets/quiz.js"></script>
+  <script>
+    LessonUI.Quiz.mount("#q1", {
+      prompt: "Path already has parquet. mode(\"overwrite\") does…",
+      options: [
+        { text: "Replace existing data at that path", correct: true, why: "overwrite clears/replaces the target then writes." },
+        { text: "Stack new files next to old ones", correct: false, why: "That is append, not overwrite." },
+        { text: "No-op if any file already exists", correct: false, why: "That is ignore." },
+        { text: "Throw AnalysisException always then", correct: false, why: "That is error / errorifexists." },
+      ],
+    });
+    LessonUI.Quiz.mount("#q2", {
+      prompt: "CSV roundtrip keeps integer amount. You need…",
+      options: [
+        { text: "header true plus inferSchema true on read", correct: true, why: "Header names cols; inferSchema types amounts as int." },
+        { text: "header false only; Spark guesses types", correct: false, why: "No header mis-names cols; still need typing strategy." },
+        { text: "parquet mode on a csv writer call", correct: false, why: "Wrong format API; use .csv or format(\"csv\")." },
+        { text: "partitionBy amount before any write", correct: false, why: "Partitioning does not fix CSV string types." },
+      ],
+    });
+    LessonUI.Quiz.mount("#q3", {
+      prompt: "window partitionBy vs write partitionBy — difference?",
+      options: [
+        { text: "Window peers rows; write lays dirs on disk", correct: true, why: "Same word, different job: analytics vs file layout." },
+        { text: "Identical — both only split shuffle groups", correct: false, why: "Write partitionBy creates path/region=… folders." },
+        { text: "Write version only works with CSV files", correct: false, why: "Common on parquet/ORC at work too." },
+        { text: "Window version only runs on write actions", correct: false, why: "Window is a transform column; write is the action." },
+      ],
+    });
+    LessonUI.Drill.mount("#drill1", {
+      prompt: "overwrite parquet write of df, then read path back",
+      accept: [
+        'df.write.mode("overwrite").parquet(path)\nspark.read.parquet(path)',
+        "df.write.mode('overwrite').parquet(path)\nspark.read.parquet(path)",
+        'df.write.mode("overwrite").parquet(path); spark.read.parquet(path)',
+        'df.write.format("parquet").mode("overwrite").save(path)\nspark.read.parquet(path)',
+        'df.write.format("parquet").mode("overwrite").save(path)\nspark.read.format("parquet").load(path)',
+      ],
+      solution: 'df.write.mode("overwrite").parquet(path)\nspark.read.parquet(path)',
+    });
+  </script>
+</body>
+</html>

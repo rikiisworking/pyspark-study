@@ -21,7 +21,7 @@ Needs a JDK (Spark local). Repo uses `pyspark` from [requirements.txt](requireme
 
 ```bash
 cd exercises
-../.venv/bin/python 10_nulls_pipeline.py   # example
+../.venv/bin/python 12_capstone_mix.py   # example
 ```
 
 4. Peek at `exercises/solutions/` only after a real try.
@@ -45,8 +45,8 @@ cd exercises
 | 5b | window + pipeline mix | [0008](lessons/0008-window-pipeline-mix.html) | `08_window_pipeline.py` |
 | 6 | nulls | [0009](lessons/0009-nulls.html) | `09_nulls.py` |
 | 6b | nulls + pipeline mix | [0010](lessons/0010-nulls-pipeline-mix.html) | `10_nulls_pipeline.py` |
-
-Optional later: read/write (parquet/csv).
+| 7 | read / write | [0011](lessons/0011-read-write.html) | `11_read_write.py` |
+| 7b | capstone mix | [0012](lessons/0012-capstone-mix.html) | `12_capstone_mix.py` |
 
 ## Layout
 

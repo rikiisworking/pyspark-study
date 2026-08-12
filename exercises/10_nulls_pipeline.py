@@ -46,10 +46,8 @@ def ex1_null_amounts(orders: DataFrame) -> DataFrame:
     Keep rows where amount is null.
     Columns: order_id, cust_id, amount, status
     """
-    return (
-        orders
-            .filter(col("amount").isNull())
-            .select("order_id", "cust_id", "amount", "status")
+    return orders.filter(col("amount").isNull()).select(
+        "order_id", "cust_id", "amount", "status"
     )
 
 
@@ -59,97 +57,78 @@ def ex2_fill_then_open(orders: DataFrame) -> DataFrame:
     Columns: order_id, cust_id, amount, status
     """
     return (
-        orders
-            .filter(col("status")=="open")
-            .fillna({"amount":0})
-            .select("order_id", "cust_id", "amount", "status")
+        orders.filter(col("status") == "open")
+        .fillna({"amount": 0})
+        .select("order_id", "cust_id", "amount", "status")
     )
 
 
-def ex3_drop_then_inner(
-    orders: DataFrame, customers: DataFrame
-) -> DataFrame:
+def ex3_drop_then_inner(orders: DataFrame, customers: DataFrame) -> DataFrame:
     """
     Drop rows with null amount OR null status.
     Inner join customers.
     Columns: order_id, name, amount, status
     """
     return (
-        orders
-            .dropna(subset=["amount", "status"])
-            .join(customers, "cust_id")
-            .select("order_id", "name", "amount", "status")
+        orders.dropna(subset=["amount", "status"])
+        .join(customers, "cust_id")
+        .select("order_id", "name", "amount", "status")
     )
 
 
-def ex4_left_coalesce_region(
-    orders: DataFrame, customers: DataFrame
-) -> DataFrame:
+def ex4_left_coalesce_region(orders: DataFrame, customers: DataFrame) -> DataFrame:
     """
     Left join customers.
     Overwrite region with coalesce(region, "unknown").
     Columns: order_id, name, region, amount
     """
     return (
-        orders
-            .join(customers, "cust_id", "left")
-            .withColumn("region", coalesce(col("region"), lit("unknown")))
-            .select("order_id", "name", "region", "amount")
+        orders.join(customers, "cust_id", "left")
+        .withColumn("region", coalesce(col("region"), lit("unknown")))
+        .select("order_id", "name", "region", "amount")
     )
+
 
 def ex5_open_or_null_status_amount_ok(orders: DataFrame) -> DataFrame:
     """
     Keep rows where (status is null OR status == "open") AND amount is not null.
     Columns: order_id, status, amount
     """
-    return (
-        orders
-            .filter(
-                (col("status").isNull()) | 
-                (col("status") == "open") & 
-                (col("amount").isNotNull()) )
-            .select("order_id", "status", "amount")         
-    )
+    return orders.filter(
+        ((col("status").isNull()) | (col("status") == "open"))
+        & (col("amount").isNotNull())
+    ).select("order_id", "status", "amount")
 
-def ex6_fill_join_sum_by_name(
-    orders: DataFrame, customers: DataFrame
-) -> DataFrame:
+
+def ex6_fill_join_sum_by_name(orders: DataFrame, customers: DataFrame) -> DataFrame:
     """
     Fill null amounts with 0, inner join customers.
     Per name: total = sum(amount).
     Columns: name, total
     """
     return (
-        orders
-            .join(customers, "cust_id")
-            .fillna({"amount": 0})
-            .groupBy("name")
-            .agg(
-                sum("amount").alias("total")
-            )
-            .select("name", "total")
+        orders.join(customers, "cust_id")
+        .fillna({"amount": 0})
+        .groupBy("name")
+        .agg(sum("amount").alias("total"))
+        .select("name", "total")
     )
 
 
-def ex7_flag_missing_amount(
-    orders: DataFrame, customers: DataFrame
-) -> DataFrame:
+def ex7_flag_missing_amount(orders: DataFrame, customers: DataFrame) -> DataFrame:
     """
     Inner join customers.
     flag = "missing" if amount is null else "ok".
     Columns: order_id, name, flag
     """
     return (
-        orders
-            .join(customers, "cust_id")
-            .withColumn("flag", when(col("amount").isNull(), "missing").otherwise("ok"))
-            .select("order_id", "name", "flag")
+        orders.join(customers, "cust_id")
+        .withColumn("flag", when(col("amount").isNull(), "missing").otherwise("ok"))
+        .select("order_id", "name", "flag")
     )
 
 
-def ex8_open_fill_sum_by_region(
-    orders: DataFrame, customers: DataFrame
-) -> DataFrame:
+def ex8_open_fill_sum_by_region(orders: DataFrame, customers: DataFrame) -> DataFrame:
     """
     Fill null amounts with 0, keep status == "open", inner join.
     region = coalesce(region, "unknown").
@@ -157,18 +136,15 @@ def ex8_open_fill_sum_by_region(
     Columns: region, total
     """
     return (
-        orders
-            .filter(col("status") == "open")
-            .fillna({"amount": 0})
-            .join(customers, "cust_id")
-            .withColumn("region", coalesce(col("region"), lit("unknown")))
-            .groupBy("region")
-            .agg(
-                 sum("amount").alias("total")
-            )
-            .select("region","total")
-
+        orders.filter(col("status") == "open")
+        .fillna({"amount": 0})
+        .join(customers, "cust_id")
+        .withColumn("region", coalesce(col("region"), lit("unknown")))
+        .groupBy("region")
+        .agg(sum("amount").alias("total"))
+        .select("region", "total")
     )
+
 
 # ---------------------------------------------------------------------------
 # Checker — do not edit below

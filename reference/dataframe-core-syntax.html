@@ -19,7 +19,9 @@
       <a href="../lessons/0007-window-functions.html">0007</a> ·
       <a href="../lessons/0008-window-pipeline-mix.html">0008</a> ·
       <a href="../lessons/0009-nulls.html">0009</a> ·
-      <a href="../lessons/0010-nulls-pipeline-mix.html">0010</a>
+      <a href="../lessons/0010-nulls-pipeline-mix.html">0010</a> ·
+      <a href="../lessons/0011-read-write.html">0011</a> ·
+      <a href="../lessons/0012-capstone-mix.html">0012</a>
     </nav>
     <header>
       <p class="eyebrow">Reference · print-friendly</p>
@@ -187,6 +189,32 @@ col("a").eqNullSafe(col("b"))               # null = null is true</code></pre>
       <a href="https://spark.apache.org/docs/latest/api/python/reference/pyspark.sql/api/pyspark.sql.Column.eqNullSafe.html">eqNullSafe</a>
     </p>
 
+    <h2>Read / write</h2>
+    <pre><code># write (action)
+df.write.mode("overwrite").parquet(path)
+df.write.mode("overwrite").option("header", True).csv(path)
+df.write.mode("overwrite").partitionBy("region").parquet(path)
+df.write.format("parquet").mode("overwrite").save(path)
+
+# modes: overwrite | append | ignore | error | errorifexists
+
+# read
+spark.read.parquet(path)
+spark.read.option("header", True).option("inferSchema", True).csv(path)
+spark.read.format("parquet").load(path)</code></pre>
+    <p>
+      <a href="https://spark.apache.org/docs/latest/api/python/reference/pyspark.sql/api/pyspark.sql.DataFrameWriter.html">Writer</a>
+      ·
+      <a href="https://spark.apache.org/docs/latest/api/python/reference/pyspark.sql/api/pyspark.sql.DataFrameReader.html">Reader</a>
+      ·
+      <a href="https://spark.apache.org/docs/latest/api/python/reference/pyspark.sql/api/pyspark.sql.DataFrameWriter.mode.html">mode</a>
+      ·
+      <a href="https://spark.apache.org/docs/latest/sql-data-sources-parquet.html">parquet</a>
+      ·
+      <a href="https://spark.apache.org/docs/latest/sql-data-sources-csv.html">csv</a>
+    </p>
+    <p>Write <code>partitionBy</code> = directory layout. Window <code>partitionBy</code> = peer groups. Different tools.</p>
+
     <footer>
       Lessons:
       <a href="../lessons/0001-filter-select-cold.html">0001</a> ·
@@ -198,7 +226,9 @@ col("a").eqNullSafe(col("b"))               # null = null is true</code></pre>
       <a href="../lessons/0007-window-functions.html">0007</a> ·
       <a href="../lessons/0008-window-pipeline-mix.html">0008</a> ·
       <a href="../lessons/0009-nulls.html">0009</a> ·
-      <a href="../lessons/0010-nulls-pipeline-mix.html">0010</a>
+      <a href="../lessons/0010-nulls-pipeline-mix.html">0010</a> ·
+      <a href="../lessons/0011-read-write.html">0011</a> ·
+      <a href="../lessons/0012-capstone-mix.html">0012</a>
     </footer>
   </div>
 </body>

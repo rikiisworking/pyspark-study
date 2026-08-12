@@ -25,8 +25,10 @@ You already own/write Spark pipelines at work, but cold-writing DataFrame API tr
 5b. window + pipeline mix — done
 6. nulls (isNull / fill / coalesce) — done
 6b. nulls + pipeline mix — done
+7. read / write (parquet + csv) — done
+7b. capstone mix (full track + I/O) — in progress
 
-Optional later: read/write (parquet/csv).
+Optional later: JSON/nested cols; Spark SQL interop (temp views).
 
 ## Out of scope
 - Cluster ops, YARN/K8s, cost tuning (until syntax solid)

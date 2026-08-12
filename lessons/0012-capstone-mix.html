@@ -1,0 +1,226 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>0012 · capstone mix</title>
+  <link rel="stylesheet" href="../assets/styles.css" />
+</head>
+<body>
+  <div class="wrap">
+    <nav class="crumbs">
+      <a href="0011-read-write.html">← 0011</a> ·
+      <a href="../reference/dataframe-core-syntax.html">Reference</a> ·
+      <a href="../exercises/12_capstone_mix.py">Exercises</a>
+    </nav>
+    <header>
+      <p class="eyebrow">Lesson 0012 · integration (not new API)</p>
+      <h1>Capstone mix</h1>
+      <p class="lede">Full track under load: nulls, join, window, agg, plus I/O the way work tickets look.</p>
+    </header>
+
+    <div class="win">
+      <strong>Win:</strong> Finish <code>12_capstone_mix.py</code> cold-ish. Includes skills often skipped: write <code>partitionBy</code> and filter <em>after</em> CSV read.
+    </div>
+
+    <h2>0. Why this exists</h2>
+    <p>
+      Core APIs through read/write are done. Storage strength = interleave them without docs.
+      Same pattern as <a href="0004-pipeline-mix.html">0004</a> / <a href="0006-full-pipeline-mix.html">0006</a> / <a href="0010-nulls-pipeline-mix.html">0010</a> — now with files in the middle.
+    </p>
+
+    <h2>1. Toolbox (all you need)</h2>
+    <pre><code>from pyspark.sql import Window
+from pyspark.sql.functions import col, coalesce, lit, row_number, sum
+
+# chain
+df.na.fill({"amount": 0}).filter(...).join(right, "key", "inner")
+df.groupBy("name").agg(sum("amount").alias("total"))
+df.withColumn("region", coalesce(col("region"), lit("unknown")))
+
+# window
+w = Window.partitionBy("name").orderBy(col("amount").desc(), col("order_id"))
+df.withColumn("rn", row_number().over(w)).filter(col("rn") == 1)
+
+# I/O
+df.write.mode("overwrite").parquet(path)
+df.write.mode("overwrite").partitionBy("region").parquet(path)
+df.write.mode("overwrite").option("header", True).csv(path)
+spark.read.parquet(path)
+spark.read.option("header", True).option("inferSchema", True).csv(path)</code></pre>
+    <p>Ref: <a href="../reference/dataframe-core-syntax.html">dataframe-core-syntax</a> ·
+      <a href="0010-nulls-pipeline-mix.html">0010</a> ·
+      <a href="0011-read-write.html">0011</a>
+    </p>
+
+    <h2>2. Data for the drills</h2>
+    <pre><code>orders(order_id, cust_id, amount, status)
+  1 10 100  open
+  2 20 null open
+  3 10 40   null
+  4 99 80   open    ← orphan
+  5 20 150  closed
+  6 30 300  open
+  7 30 null closed
+  8 10 200  closed
+
+customers(cust_id, name, region)
+  10 Alice east
+  20 Bob   null
+  30 Carol east
+  40 Dan   north</code></pre>
+
+    <h2>3. Knowledge → each exercise</h2>
+
+    <h3>ex1 — fill → join → sum by name</h3>
+    <pre><code>(
+    orders.na.fill({"amount": 0})
+          .join(customers, "cust_id", "inner")
+          .groupBy("name")
+          .agg(sum("amount").alias("total"))
+)
+# Alice 340, Bob 150, Carol 300</code></pre>
+
+    <h3>ex2 — drop null amount/status → inner join</h3>
+    <pre><code>(
+    orders.na.drop(subset=["amount", "status"])
+          .join(customers, "cust_id", "inner")
+)
+# drops 2,3,7 and orphan 4</code></pre>
+
+    <h3>ex3 — open → parquet → read</h3>
+    <pre><code>orders.filter(col("status") == "open").write.mode("overwrite").parquet(path)
+spark.read.parquet(path)</code></pre>
+
+    <h3>ex4 — fill → join → <em>partitionBy region</em> → read east</h3>
+    <pre><code>(
+    orders.na.fill({"amount": 0})
+          .join(customers, "cust_id", "inner")
+          .write.mode("overwrite")
+          .partitionBy("region")   # disk folders, not filter-first
+          .parquet(path)
+)
+(
+    spark.read.parquet(path)
+         .filter(col("region") == "east")
+         .select("order_id", "name", "region", "amount")
+)
+# Bob lands under null partition; east = Alice+Carol rows (amount 0 filled on id7)</code></pre>
+
+    <h3>ex5 — overwrite open, then overwrite closed</h3>
+    <pre><code># second overwrite replaces path → only closed rows
+# ids 5, 7, 8</code></pre>
+
+    <h3>ex6 — CSV full write, filter open <em>after</em> read</h3>
+    <pre><code>orders.write.mode("overwrite").option("header", True).csv(path)
+(
+    spark.read.option("header", True).option("inferSchema", True).csv(path)
+         .filter(col("status") == "open")
+)
+# Do NOT filter before write — ticket is “load then filter”</code></pre>
+
+    <h3>ex7 — top open amount per name (window)</h3>
+    <pre><code>w = Window.partitionBy("name").orderBy(col("amount").desc(), col("order_id"))
+(
+    orders.filter((col("status") == "open") &amp; col("amount").isNotNull())
+          .join(customers, "cust_id", "inner")
+          .withColumn("rn", row_number().over(w))
+          .filter(col("rn") == 1)
+          .select("order_id", "name", "amount")
+)
+# Alice 100, Carol 300 — Bob open has null amount, dropped</code></pre>
+
+    <h3>ex8 — open fill sum by region</h3>
+    <pre><code>(
+    orders.na.fill({"amount": 0})
+          .filter(col("status") == "open")
+          .join(customers, "cust_id", "inner")
+          .withColumn("region", coalesce(col("region"), lit("unknown")))
+          .groupBy("region")
+          .agg(sum("amount").alias("total"))
+)
+# east 400, unknown 0 (Bob)</code></pre>
+
+    <h2>4. Order habits (work)</h2>
+    <ul>
+      <li>Fill/drop before agg when nulls would undercount.</li>
+      <li>Write <code>partitionBy</code> = folder layout; filter partition <em>after</em> read (or path prune).</li>
+      <li>CSV: write full often; filter is a read-side choice.</li>
+      <li>Top-N: <code>row_number</code> + filter — not groupBy max + rejoin unless needed.</li>
+    </ul>
+
+    <h2>5. Retrieval</h2>
+    <div id="q1"></div>
+    <div id="q2"></div>
+    <div id="q3"></div>
+
+    <h2>6. Cold write</h2>
+    <div id="drill1"></div>
+
+    <h2>7. Run</h2>
+    <pre><code>cd exercises
+../.venv/bin/python 12_capstone_mix.py</code></pre>
+    <p>
+      File: <code>exercises/12_capstone_mix.py</code> ·
+      Peek after try: <code>exercises/solutions/12_capstone_mix.py</code>
+    </p>
+
+    <div class="source">
+      <strong>Primary source:</strong> your
+      <a href="../reference/dataframe-core-syntax.html">core syntax sheet</a>
+      — this lesson is retrieval. Fallback:
+      <a href="https://spark.apache.org/docs/latest/api/python/reference/pyspark.sql/api/pyspark.sql.DataFrameWriter.partitionBy.html">partitionBy</a>,
+      <a href="https://spark.apache.org/docs/latest/api/python/reference/pyspark.sql/api/pyspark.sql.Window.html">Window</a>.
+    </div>
+
+    <div class="ask">
+      FAIL? Paste got vs expected. Name the step: nulls / join / window / mode / partitionBy / CSV options.
+    </div>
+
+    <footer>
+      Prev: <a href="0011-read-write.html">0011</a>
+      · Next after PASS: optional JSON/nested, or Spark SQL interop
+    </footer>
+  </div>
+  <script src="../assets/quiz.js"></script>
+  <script>
+    LessonUI.Quiz.mount("#q1", {
+      prompt: "Need east rows from a region-partitioned parquet path. Best?",
+      options: [
+        { text: "partitionBy region on write, filter region on read", correct: true, why: "Layout on disk + prune/filter after load." },
+        { text: "filter region east first, then plain parquet write", correct: false, why: "Works for rows but skips partition layout skill." },
+        { text: "window partitionBy region then write csv only", correct: false, why: "Window does not create folders." },
+        { text: "mode append twice then drop west by hand", correct: false, why: "Messy; not partitionBy." },
+      ],
+    });
+    LessonUI.Quiz.mount("#q2", {
+      prompt: "Ticket: save full table CSV, then keep open only. When filter?",
+      options: [
+        { text: "After read of the full CSV path", correct: true, why: "Write lands full; filter is a read-side choice." },
+        { text: "Before write so the file stays small", correct: false, why: "That changes the artifact; ticket said full table." },
+        { text: "Inside partitionBy as a third key", correct: false, why: "partitionBy is not a row filter." },
+        { text: "Never — open is the default CSV mode", correct: false, why: "No such mode." },
+      ],
+    });
+    LessonUI.Quiz.mount("#q3", {
+      prompt: "Top open amount per name. amount null on one open row?",
+      options: [
+        { text: "Drop null amounts before the window rank", correct: true, why: "Null amount should not win top-N for spend." },
+        { text: "Keep nulls; row_number treats null as highest", correct: false, why: "Null ordering is not a reliable top spend." },
+        { text: "Fill null to zero after rank equals one", correct: false, why: "Too late; ranking already ran." },
+        { text: "Use groupBy name only; skip window entirely", correct: false, why: "groupBy loses the order_id of the winning row unless you rejoin." },
+      ],
+    });
+    LessonUI.Drill.mount("#drill1", {
+      prompt: "fill amount 0 → join → partitionBy region overwrite parquet → read filter east",
+      accept: [
+        'orders.na.fill({"amount": 0}).join(customers, "cust_id", "inner").write.mode("overwrite").partitionBy("region").parquet(path)\nspark.read.parquet(path).filter(col("region") == "east")',
+        'orders.na.fill({"amount": 0}).join(customers,"cust_id","inner").write.mode("overwrite").partitionBy("region").parquet(path)\nspark.read.parquet(path).filter(col("region")=="east")',
+        "orders.na.fill({'amount': 0}).join(customers, 'cust_id', 'inner').write.mode('overwrite').partitionBy('region').parquet(path)\nspark.read.parquet(path).filter(col('region') == 'east')",
+        'orders.fillna({"amount": 0}).join(customers, "cust_id", "inner").write.mode("overwrite").partitionBy("region").parquet(path)\nspark.read.parquet(path).filter(col("region") == "east")',
+      ],
+      solution: 'orders.na.fill({"amount": 0}).join(customers, "cust_id", "inner").write.mode("overwrite").partitionBy("region").parquet(path)\nspark.read.parquet(path).filter(col("region") == "east")',
+    });
+  </script>
+</body>
+</html>
