@@ -49,7 +49,15 @@ def ex1_fill_join_sum_by_name(
     Per name: total = sum(amount).
     Columns: name, total
     """
-    raise NotImplementedError
+   
+    return (
+        orders
+            .fillna({"amount":0})
+            .join(customers,"cust_id")
+            .groupBy("name")
+            .agg(sum("amount").alias("total"))
+            .select("name", "total")
+    )
 
 
 def ex2_drop_join_select(
@@ -60,7 +68,12 @@ def ex2_drop_join_select(
     Inner join customers.
     Columns: order_id, name, amount, status
     """
-    raise NotImplementedError
+    return (
+        orders
+            .dropna(subset=("amount", "status"))
+            .join(customers, "cust_id")
+            .select("order_id", "name", "amount", "status")
+    )
 
 
 def ex3_write_open_parquet(
@@ -70,8 +83,13 @@ def ex3_write_open_parquet(
     status == "open", write parquet overwrite, read back.
     Columns: order_id, cust_id, amount, status
     """
-    raise NotImplementedError
+    
+    orders.filter(col("status")=="open").write.mode("overwrite").parquet(path)
 
+    return (
+        spark.read.parquet(path)
+            .select("order_id", "cust_id", "amount", "status")
+    )
 
 def ex4_partition_by_region_east(
     spark: SparkSession, orders: DataFrame, customers: DataFrame, path: str
@@ -82,8 +100,13 @@ def ex4_partition_by_region_east(
     Read path, keep region == "east".
     Columns: order_id, name, region, amount  (this order)
     """
-    raise NotImplementedError
 
+    orders.fillna({"amount":0}).join(customers, "cust_id").write.mode("overwrite").partitionBy("region").parquet(path)
+    return (
+        spark.read.parquet(path)
+            .filter(col("region")=="east")
+            .select("order_id", "name", "region", "amount")
+    )
 
 def ex5_overwrite_open_then_closed(
     spark: SparkSession, orders: DataFrame, path: str
@@ -94,8 +117,13 @@ def ex5_overwrite_open_then_closed(
     Read — only closed remain.
     Columns: order_id, cust_id, amount, status
     """
-    raise NotImplementedError
 
+    orders.filter(col("status")=="open").write.mode("overwrite").parquet(path)
+    orders.filter(col("status")=="closed").write.mode("overwrite").parquet(path)
+    return (
+        spark.read.parquet(path)
+            .select("order_id", "cust_id", "amount", "status")
+    )
 
 def ex6_csv_full_then_filter_open(
     spark: SparkSession, orders: DataFrame, path: str
@@ -106,7 +134,12 @@ def ex6_csv_full_then_filter_open(
     (Do not filter before write.)
     Columns: order_id, cust_id, amount, status
     """
-    raise NotImplementedError
+    orders.write.mode("overwrite").csv(path, header=True)
+    return (
+        spark.read.csv(path, inferSchema=True, header=True)
+            .filter(col("status")=="open")
+            .select("order_id", "cust_id", "amount", "status")
+    )
 
 
 def ex7_top_open_per_name(
@@ -119,7 +152,15 @@ def ex7_top_open_per_name(
     Keep rn == 1.
     Columns: order_id, name, amount
     """
-    raise NotImplementedError
+    w = Window.partitionBy("name").orderBy(col("amount").desc(), col("order_id").asc())
+    return (
+        orders
+            .filter((col("status")=="open") & (col("amount").isNotNull()))
+            .join(customers, "cust_id")
+            .withColumn("rn", row_number().over(w))
+            .filter(col("rn") == 1)
+            .select("order_id", "name", "amount")
+    )
 
 
 def ex8_open_fill_sum_by_region(
@@ -131,7 +172,18 @@ def ex8_open_fill_sum_by_region(
     Per region: total = sum(amount).
     Columns: region, total
     """
-    raise NotImplementedError
+    return (
+        orders
+            .fillna({"amount":0})
+            .filter(col("status")=="open")
+            .join(customers, "cust_id")
+            .withColumn("region", coalesce("region", lit("unknown")))
+            .groupBy("region")
+            .agg(
+                sum("amount").alias("total")
+            )
+            .select("region", "total")
+    )
 
 
 # ---------------------------------------------------------------------------
