@@ -23,7 +23,8 @@
       <a href="../lessons/0011-read-write.html">0011</a> ·
       <a href="../lessons/0012-capstone-mix.html">0012</a> ·
       <a href="../lessons/0013-nested-json.html">0013</a> ·
-      <a href="../lessons/0014-nested-pipeline-mix.html">0014</a>
+      <a href="../lessons/0014-nested-pipeline-mix.html">0014</a> ·
+      <a href="../lessons/0015-sql-interop.html">0015</a>
     </nav>
     <header>
       <p class="eyebrow">Reference · print-friendly</p>
@@ -246,6 +247,36 @@ explode_outer(col("p.tags"))   # empty → parent kept, element null</code></pre
       <a href="https://spark.apache.org/docs/latest/api/python/reference/pyspark.sql/api/pyspark.sql.functions.explode_outer.html">explode_outer</a>
     </p>
 
+    <h2>Spark SQL interop</h2>
+    <pre><code># local temp view (session-scoped)
+df.createOrReplaceTempView("orders")
+spark.sql("SELECT * FROM orders WHERE status = 'open'")  # → DataFrame
+
+# global temp view (app-scoped; must qualify)
+df.createOrReplaceGlobalTempView("orders_g")
+spark.sql("SELECT * FROM global_temp.orders_g")
+
+# SQL fragments on one DF (no view)
+df.selectExpr("order_id", "amount * 2 AS double_amt")
+
+# drop
+spark.catalog.dropTempView("orders")
+spark.catalog.dropGlobalTempView("orders_g")
+
+# createTempView throws if name exists — prefer createOrReplaceTempView</code></pre>
+    <p>
+      <a href="https://spark.apache.org/docs/latest/api/python/reference/pyspark.sql/api/pyspark.sql.DataFrame.createOrReplaceTempView.html">createOrReplaceTempView</a>
+      ·
+      <a href="https://spark.apache.org/docs/latest/api/python/reference/pyspark.sql/api/pyspark.sql.DataFrame.createOrReplaceGlobalTempView.html">createOrReplaceGlobalTempView</a>
+      ·
+      <a href="https://spark.apache.org/docs/latest/api/python/reference/pyspark.sql/api/pyspark.sql.SparkSession.sql.html">spark.sql</a>
+      ·
+      <a href="https://spark.apache.org/docs/latest/api/python/reference/pyspark.sql/api/pyspark.sql.DataFrame.selectExpr.html">selectExpr</a>
+      ·
+      <a href="https://spark.apache.org/docs/latest/sql-getting-started.html#running-sql-queries-programmatically">SQL getting started</a>
+    </p>
+    <p>Same Catalyst planner as DF API. Prefer DF for owned pipelines; SQL for explore / teammate SQL / clear multi-join CTEs.</p>
+
     <footer>
       Lessons:
       <a href="../lessons/0001-filter-select-cold.html">0001</a> ·
@@ -261,7 +292,8 @@ explode_outer(col("p.tags"))   # empty → parent kept, element null</code></pre
       <a href="../lessons/0011-read-write.html">0011</a> ·
       <a href="../lessons/0012-capstone-mix.html">0012</a> ·
       <a href="../lessons/0013-nested-json.html">0013</a> ·
-      <a href="../lessons/0014-nested-pipeline-mix.html">0014</a>
+      <a href="../lessons/0014-nested-pipeline-mix.html">0014</a> ·
+      <a href="../lessons/0015-sql-interop.html">0015</a>
     </footer>
   </div>
 </body>

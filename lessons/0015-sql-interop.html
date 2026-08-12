@@ -1,0 +1,250 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>0015 · Spark SQL interop</title>
+  <link rel="stylesheet" href="../assets/styles.css" />
+</head>
+<body>
+  <div class="wrap">
+    <nav class="crumbs">
+      <a href="0014-nested-pipeline-mix.html">← 0014</a> ·
+      <a href="../reference/dataframe-core-syntax.html">Reference</a> ·
+      <a href="../exercises/15_sql_interop.py">Exercises</a>
+    </nav>
+    <header>
+      <p class="eyebrow">Lesson 0015 · DataFrame ↔ SQL</p>
+      <h1>Spark SQL interop (temp views)</h1>
+      <p class="lede">Register a DataFrame, query it with SQL, get a DataFrame back — then keep chaining.</p>
+    </header>
+
+    <div class="win">
+      <strong>Win:</strong> Cold-write <code>createOrReplaceTempView</code>, <code>spark.sql(…)</code>, <code>selectExpr</code>, and <code>global_temp.name</code>. Know when SQL is fine vs DF default.
+    </div>
+
+    <h2>0. Map: knowledge → exercise</h2>
+    <pre><code>ex1  createOrReplaceTempView + SQL filter
+ex2  two views + SQL join
+ex3  SQL groupBy / agg with alias
+ex4  selectExpr (no view needed)
+ex5  SQL result → DF withColumn continue
+ex6  createOrReplaceTempView replaces content
+ex7  global temp view → global_temp.name
+ex8  SQL join + filter + project</code></pre>
+
+    <h2>1. Toy data (same as drills)</h2>
+    <pre><code>orders
+  order_id | cust_id | amount | status
+         1 |      10 |    100 | open
+         2 |      20 |     50 | open
+         3 |      10 |    200 | closed
+         4 |      30 |    150 | open
+
+customers
+  cust_id | name  | region
+       10 | Alice | east
+       20 | Bob   | west
+       30 | Carol | east</code></pre>
+
+    <h2>2. Mental model</h2>
+    <p>
+      DataFrame API and Spark SQL share the <strong>same Catalyst plan</strong>. Interop is not a second engine —
+      it is a bridge for notebooks, ad-hoc SQL, and colleague queries.
+    </p>
+    <ul>
+      <li><strong>Local temp view</strong> — session-scoped. Prefer <code>createOrReplaceTempView</code>. Query as <code>orders</code>.</li>
+      <li><strong>Global temp view</strong> — application-scoped, lives under system DB <code>global_temp</code>. Query as <code>global_temp.view_name</code>.</li>
+      <li><strong><code>spark.sql</code></strong> always returns a <strong>DataFrame</strong>. You can <code>.filter</code> / <code>withColumn</code> after.</li>
+      <li><strong><code>selectExpr</code></strong> — SQL fragments on one DF, no view registration.</li>
+    </ul>
+    <pre><code># local temp view (session lifetime)
+orders.createOrReplaceTempView("orders")
+spark.sql("SELECT * FROM orders WHERE status = 'open'")
+
+# global temp view (app lifetime; qualified name)
+orders.createOrReplaceGlobalTempView("orders_g")
+spark.sql("SELECT * FROM global_temp.orders_g")
+
+# SQL fragments without a view
+orders.selectExpr("order_id", "amount * 2 AS double_amt")
+
+# drop when done (optional in short scripts)
+spark.catalog.dropTempView("orders")
+spark.catalog.dropGlobalTempView("orders_g")</code></pre>
+    <p>
+      Docs:
+      <a href="https://spark.apache.org/docs/latest/api/python/reference/pyspark.sql/api/pyspark.sql.DataFrame.createOrReplaceTempView.html">createOrReplaceTempView</a> ·
+      <a href="https://spark.apache.org/docs/latest/api/python/reference/pyspark.sql/api/pyspark.sql.SparkSession.sql.html">SparkSession.sql</a> ·
+      <a href="https://spark.apache.org/docs/latest/api/python/reference/pyspark.sql/api/pyspark.sql.DataFrame.createOrReplaceGlobalTempView.html">createOrReplaceGlobalTempView</a> ·
+      <a href="https://spark.apache.org/docs/latest/api/python/reference/pyspark.sql/api/pyspark.sql.DataFrame.selectExpr.html">selectExpr</a> ·
+      <a href="https://spark.apache.org/docs/latest/sql-getting-started.html#running-sql-queries-programmatically">SQL getting started</a>
+    </p>
+
+    <h2>3. When SQL vs DataFrame</h2>
+    <p>
+      Mission default: <strong>DataFrame API</strong> for pipelines you own (typed columns, composable functions, fewer string bugs).
+      SQL is fine when:
+    </p>
+    <ul>
+      <li>Exploring in a notebook / one-off ticket</li>
+      <li>Colleague already wrote solid SQL</li>
+      <li>A multi-join CTE reads clearer as SQL than a long DF chain</li>
+    </ul>
+    <p>Either path compiles to the same planner — pick readability for the reader (you, or your teammate).</p>
+
+    <h2>4. Core patterns (solution kit)</h2>
+
+    <h3>ex1 — register + filter</h3>
+    <pre><code>orders.createOrReplaceTempView("orders")
+spark.sql("""
+  SELECT order_id, amount, status
+  FROM orders
+  WHERE status = 'open'
+""")
+# ids 1, 2, 4</code></pre>
+
+    <h3>ex2 — two views + join</h3>
+    <pre><code>orders.createOrReplaceTempView("orders")
+customers.createOrReplaceTempView("customers")
+spark.sql("""
+  SELECT o.order_id, c.name, o.amount
+  FROM orders o
+  INNER JOIN customers c ON o.cust_id = c.cust_id
+""")</code></pre>
+
+    <h3>ex3 — SQL agg</h3>
+    <pre><code>orders.createOrReplaceTempView("orders")
+spark.sql("""
+  SELECT status, SUM(amount) AS total
+  FROM orders
+  GROUP BY status
+""")
+# open → 300, closed → 200</code></pre>
+
+    <h3>ex4 — selectExpr (no view)</h3>
+    <pre><code>orders.selectExpr("order_id", "amount * 2 AS double_amt")</code></pre>
+
+    <h3>ex5 — SQL then DF chain</h3>
+    <pre><code>orders.createOrReplaceTempView("orders")
+(
+    spark.sql("SELECT order_id, amount FROM orders WHERE status = 'open'")
+         .withColumn("tax", col("amount") * 0.1)
+         .select("order_id", "amount", "tax")
+)</code></pre>
+
+    <h3>ex6 — replace view</h3>
+    <pre><code># first bind open-only under name "v"
+orders.filter(col("status") == "open").createOrReplaceTempView("v")
+# replace with full frame
+orders.createOrReplaceTempView("v")
+spark.sql("SELECT order_id, status FROM v")
+# all 4 rows — replace wins</code></pre>
+
+    <h3>ex7 — global_temp</h3>
+    <pre><code>orders.createOrReplaceGlobalTempView("orders_g")
+spark.sql("""
+  SELECT order_id, amount
+  FROM global_temp.orders_g
+  WHERE amount &gt;= 100
+""")
+# bare FROM orders_g fails — must qualify</code></pre>
+
+    <h3>ex8 — join + filter in SQL</h3>
+    <pre><code>orders.createOrReplaceTempView("orders")
+customers.createOrReplaceTempView("customers")
+spark.sql("""
+  SELECT o.order_id, c.name, o.amount, c.region
+  FROM orders o
+  INNER JOIN customers c ON o.cust_id = c.cust_id
+  WHERE o.status = 'open' AND c.region = 'east'
+""")
+# (1 Alice 100 east), (4 Carol 150 east)</code></pre>
+
+    <h2>5. Traps (work)</h2>
+    <ul>
+      <li><code>createTempView</code> throws if the name exists — prefer <code>createOrReplaceTempView</code>.</li>
+      <li>Local view dies with the <strong>session</strong>; global dies with the <strong>application</strong>.</li>
+      <li>Global must be <code>global_temp.view_name</code> — bare name is a different catalog path.</li>
+      <li>View name is not the Python variable. <code>df.createOrReplaceTempView("orders")</code> then <code>FROM orders</code>.</li>
+      <li>SQL strings use single quotes for literals: <code>status = 'open'</code>.</li>
+      <li><code>spark.sql</code> returns a DF — column names follow your SQL aliases.</li>
+    </ul>
+
+    <h2>6. Retrieval</h2>
+    <div id="q1"></div>
+    <div id="q2"></div>
+    <div id="q3"></div>
+
+    <h2>7. Cold write</h2>
+    <div id="drill1"></div>
+
+    <h2>8. Run</h2>
+    <pre><code>cd exercises
+../.venv/bin/python 15_sql_interop.py</code></pre>
+    <p>
+      File: <code>exercises/15_sql_interop.py</code> ·
+      Peek after try: <code>exercises/solutions/15_sql_interop.py</code>
+    </p>
+
+    <div class="source">
+      <strong>Primary source:</strong>
+      <a href="https://spark.apache.org/docs/latest/sql-getting-started.html#running-sql-queries-programmatically">Running SQL queries programmatically</a>
+      ·
+      <a href="https://spark.apache.org/docs/latest/api/python/reference/pyspark.sql/api/pyspark.sql.DataFrame.createOrReplaceTempView.html">createOrReplaceTempView</a>
+      ·
+      <a href="https://spark.apache.org/docs/latest/api/python/reference/pyspark.sql/api/pyspark.sql.SparkSession.sql.html">spark.sql</a>
+    </div>
+
+    <div class="ask">
+      FAIL? Paste got vs expected. Name step: view name, SQL quote, join ON, global_temp qualify, selectExpr alias, or post-SQL DF step.
+      Ask the agent anything unclear — teacher is here.
+    </div>
+
+    <footer>
+      Prev: <a href="0014-nested-pipeline-mix.html">0014</a>
+      · Next after PASS: optional mix / mission complete stretch
+    </footer>
+  </div>
+  <script src="../assets/quiz.js"></script>
+  <script>
+    LessonUI.Quiz.mount("#q1", {
+      prompt: "Register DF for session SQL. Prefer…",
+      options: [
+        { text: "createOrReplaceTempView with a name", correct: true, why: "Session-scoped; safe if name already exists." },
+        { text: "createTempView only after a drop always", correct: false, why: "Works but brittle; replace is the usual habit." },
+        { text: "write parquet then SQL the files path", correct: false, why: "I/O for a view you already hold in memory." },
+        { text: "collect to list then run pure Python", correct: false, why: "Leaves the cluster; not Spark SQL interop." },
+      ],
+    });
+    LessonUI.Quiz.mount("#q2", {
+      prompt: "Query a global temporary view. Correct FROM?",
+      options: [
+        { text: "global_temp.view_name fully qualified", correct: true, why: "Global views live under the global_temp database." },
+        { text: "bare view_name like a local temp", correct: false, why: "Local catalog path; global needs the prefix." },
+        { text: "spark_catalog.default.view_name only", correct: false, why: "Wrong namespace for global temp views." },
+        { text: "hive.default.view_name without prefix", correct: false, why: "Not how Spark exposes global temp views." },
+      ],
+    });
+    LessonUI.Quiz.mount("#q3", {
+      prompt: "spark.sql(\"SELECT …\") returns…",
+      options: [
+        { text: "A DataFrame you can keep chaining", correct: true, why: "Same DF type as filter/select — plan not forced yet." },
+        { text: "A Python list of Row objects only", correct: false, why: "That is collect(); sql itself stays lazy DF." },
+        { text: "A permanent Hive table always written", correct: false, why: "Temp views and queries are not metastore tables." },
+        { text: "An RDD of strings, never a DF again", correct: false, why: "You stay on DataFrame API after sql." },
+      ],
+    });
+    LessonUI.Drill.mount("#drill1", {
+      prompt: "createOrReplaceTempView(\"orders\") then spark.sql open rows: order_id, amount",
+      accept: [
+        'orders.createOrReplaceTempView("orders"); spark.sql("SELECT order_id, amount FROM orders WHERE status = \'open\'")',
+        "orders.createOrReplaceTempView('orders'); spark.sql(\"SELECT order_id, amount FROM orders WHERE status = 'open'\")",
+        'orders.createOrReplaceTempView("orders")\nspark.sql("SELECT order_id, amount FROM orders WHERE status = \'open\'")',
+        "orders.createOrReplaceTempView(\"orders\")\nspark.sql(\"SELECT order_id, amount FROM orders WHERE status = 'open'\")",
+      ],
+      solution: 'orders.createOrReplaceTempView("orders")\nspark.sql("SELECT order_id, amount FROM orders WHERE status = \'open\'")',
+    });
+  </script>
+</body>
+</html>

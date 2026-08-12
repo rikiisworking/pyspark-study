@@ -49,6 +49,7 @@ cd exercises
 | 7b | capstone mix | [0012](lessons/0012-capstone-mix.html) | `12_capstone_mix.py` |
 | 8 | nested + JSON | [0013](lessons/0013-nested-json.html) | `13_nested_json.py` |
 | 8b | nested + pipeline mix | [0014](lessons/0014-nested-pipeline-mix.html) | `14_nested_pipeline.py` |
+| 9 | Spark SQL interop | [0015](lessons/0015-sql-interop.html) | `15_sql_interop.py` |
 
 ## Layout
 

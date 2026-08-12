@@ -34,6 +34,10 @@
   Official data source guides. Use for: format options, partition discovery.
 - [functions.from_json](https://spark.apache.org/docs/latest/api/python/reference/pyspark.sql/api/pyspark.sql.functions.from_json.html) · [get_json_object](https://spark.apache.org/docs/latest/api/python/reference/pyspark.sql/api/pyspark.sql.functions.get_json_object.html) · [explode](https://spark.apache.org/docs/latest/api/python/reference/pyspark.sql/api/pyspark.sql.functions.explode.html) · [explode_outer](https://spark.apache.org/docs/latest/api/python/reference/pyspark.sql/api/pyspark.sql.functions.explode_outer.html)
   Nested/JSON parse + array flatten. Use for: lesson 0013.
+- [Running SQL Queries Programmatically — Getting Started](https://spark.apache.org/docs/latest/sql-getting-started.html#running-sql-queries-programmatically) · [Global Temporary View](https://spark.apache.org/docs/latest/sql-getting-started.html#global-temporary-view)
+  Official bridge: register DF as view, `spark.sql`, local vs global temp. Use for: lesson 0015.
+- [createOrReplaceTempView](https://spark.apache.org/docs/latest/api/python/reference/pyspark.sql/api/pyspark.sql.DataFrame.createOrReplaceTempView.html) · [createOrReplaceGlobalTempView](https://spark.apache.org/docs/latest/api/python/reference/pyspark.sql/api/pyspark.sql.DataFrame.createOrReplaceGlobalTempView.html) · [SparkSession.sql](https://spark.apache.org/docs/latest/api/python/reference/pyspark.sql/api/pyspark.sql.SparkSession.sql.html) · [selectExpr](https://spark.apache.org/docs/latest/api/python/reference/pyspark.sql/api/pyspark.sql.DataFrame.selectExpr.html)
+  API truth for views + SQL + expression fragments. Use for: lesson 0015 drills and reference.
 
 ## Wisdom (Communities)
 
