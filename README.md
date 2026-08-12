@@ -47,6 +47,7 @@ cd exercises
 | 6b | nulls + pipeline mix | [0010](lessons/0010-nulls-pipeline-mix.html) | `10_nulls_pipeline.py` |
 | 7 | read / write | [0011](lessons/0011-read-write.html) | `11_read_write.py` |
 | 7b | capstone mix | [0012](lessons/0012-capstone-mix.html) | `12_capstone_mix.py` |
+| 8 | nested + JSON | [0013](lessons/0013-nested-json.html) | `13_nested_json.py` |
 
 ## Layout
 

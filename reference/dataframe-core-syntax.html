@@ -21,7 +21,8 @@
       <a href="../lessons/0009-nulls.html">0009</a> ·
       <a href="../lessons/0010-nulls-pipeline-mix.html">0010</a> ·
       <a href="../lessons/0011-read-write.html">0011</a> ·
-      <a href="../lessons/0012-capstone-mix.html">0012</a>
+      <a href="../lessons/0012-capstone-mix.html">0012</a> ·
+      <a href="../lessons/0013-nested-json.html">0013</a>
     </nav>
     <header>
       <p class="eyebrow">Reference · print-friendly</p>
@@ -215,6 +216,35 @@ spark.read.format("parquet").load(path)</code></pre>
     </p>
     <p>Write <code>partitionBy</code> = directory layout. Window <code>partitionBy</code> = peer groups. Different tools.</p>
 
+    <h2>Nested + JSON</h2>
+    <pre><code>from pyspark.sql.functions import col, from_json, get_json_object, explode, explode_outer
+
+# typed struct fields
+col("user.id")
+col("user.name")
+
+# JSON string → typed
+schema = "user STRUCT&lt;id:INT, name:STRING&gt;, amount INT, tags ARRAY&lt;STRING&gt;"
+df.withColumn("p", from_json(col("raw"), schema))
+col("p.user.id")
+col("p.amount")
+
+# one path, string out
+get_json_object(col("raw"), "$.user.id").cast("int")
+
+# array → rows
+explode(col("p.tags"))         # empty array drops parent
+explode_outer(col("p.tags"))   # empty → parent kept, element null</code></pre>
+    <p>
+      <a href="https://spark.apache.org/docs/latest/api/python/reference/pyspark.sql/api/pyspark.sql.functions.from_json.html">from_json</a>
+      ·
+      <a href="https://spark.apache.org/docs/latest/api/python/reference/pyspark.sql/api/pyspark.sql.functions.get_json_object.html">get_json_object</a>
+      ·
+      <a href="https://spark.apache.org/docs/latest/api/python/reference/pyspark.sql/api/pyspark.sql.functions.explode.html">explode</a>
+      ·
+      <a href="https://spark.apache.org/docs/latest/api/python/reference/pyspark.sql/api/pyspark.sql.functions.explode_outer.html">explode_outer</a>
+    </p>
+
     <footer>
       Lessons:
       <a href="../lessons/0001-filter-select-cold.html">0001</a> ·
@@ -228,7 +258,8 @@ spark.read.format("parquet").load(path)</code></pre>
       <a href="../lessons/0009-nulls.html">0009</a> ·
       <a href="../lessons/0010-nulls-pipeline-mix.html">0010</a> ·
       <a href="../lessons/0011-read-write.html">0011</a> ·
-      <a href="../lessons/0012-capstone-mix.html">0012</a>
+      <a href="../lessons/0012-capstone-mix.html">0012</a> ·
+      <a href="../lessons/0013-nested-json.html">0013</a>
     </footer>
   </div>
 </body>

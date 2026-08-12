@@ -22,3 +22,5 @@
 - Mix 0010 hammers: fill-before-agg, open-OR-isNull, left+coalesce region
 - Read/write (0011): mode deliberate; CSV needs header+inferSchema (or schema); write partitionBy ≠ window partitionBy
 - Capstone 0012: re-hammer write partitionBy + filter-after-CSV-read (gaps from 0011 PASS)
+- After core+capstone: nested/JSON (0013) — work payloads; then optional mix; then Spark SQL interop
+- Nested traps: from_json needs schema; get_json_object → string; explode drops empty; explode_outer keeps

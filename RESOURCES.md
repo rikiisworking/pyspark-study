@@ -32,6 +32,8 @@
   Save/load API + overwrite/append/ignore/error. Use for: lesson 0011.
 - [Parquet Files](https://spark.apache.org/docs/latest/sql-data-sources-parquet.html) · [CSV Files](https://spark.apache.org/docs/latest/sql-data-sources-csv.html) · [Generic load/save](https://spark.apache.org/docs/latest/sql-data-sources-load-save-functions.html)
   Official data source guides. Use for: format options, partition discovery.
+- [functions.from_json](https://spark.apache.org/docs/latest/api/python/reference/pyspark.sql/api/pyspark.sql.functions.from_json.html) · [get_json_object](https://spark.apache.org/docs/latest/api/python/reference/pyspark.sql/api/pyspark.sql.functions.get_json_object.html) · [explode](https://spark.apache.org/docs/latest/api/python/reference/pyspark.sql/api/pyspark.sql.functions.explode.html) · [explode_outer](https://spark.apache.org/docs/latest/api/python/reference/pyspark.sql/api/pyspark.sql.functions.explode_outer.html)
+  Nested/JSON parse + array flatten. Use for: lesson 0013.
 
 ## Wisdom (Communities)
 

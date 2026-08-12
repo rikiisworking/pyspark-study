@@ -1,0 +1,225 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>0013 · nested + JSON</title>
+  <link rel="stylesheet" href="../assets/styles.css" />
+</head>
+<body>
+  <div class="wrap">
+    <nav class="crumbs">
+      <a href="0012-capstone-mix.html">← 0012</a> ·
+      <a href="../reference/dataframe-core-syntax.html">Reference</a> ·
+      <a href="../exercises/13_nested_json.py">Exercises</a>
+    </nav>
+    <header>
+      <p class="eyebrow">Lesson 0013 · DataFrame API</p>
+      <h1>Nested columns + JSON strings</h1>
+      <p class="lede">Work data is rarely flat. Pull fields from structs and JSON text, then explode arrays.</p>
+    </header>
+
+    <div class="win">
+      <strong>Win:</strong> Cold-write <code>col("a.b")</code>, <code>from_json</code> + DDL schema, <code>get_json_object</code>, <code>explode</code> / <code>explode_outer</code>.
+    </div>
+
+    <h2>0. Map: knowledge → exercise</h2>
+    <pre><code>ex1  struct already typed → select user.name
+ex2  filter user.id == 10
+ex3  from_json raw → user_id, amount
+ex4  get_json_object $.user.id (cast int)
+ex5  explode tags (drop empty)
+ex6  explode_outer tags (keep empty as null)
+ex7  from_json + amount &gt;= 100
+ex8  from_json + groupBy user_id sum</code></pre>
+
+    <h2>1. Toy data (same as drills)</h2>
+    <pre><code>orders  (already nested struct)
+  order_id | user.id | user.name | amount
+         1 |      10 | Alice     |    100
+         2 |      20 | Bob       |     50
+         3 |      10 | Alice     |    200
+         4 |      30 | Carol     |     80
+
+events  (JSON text in column raw)
+  event_id | raw
+         1 | {"user":{"id":10,"name":"Alice"},"amount":100,"tags":["a","b"]}
+         2 | {"user":{"id":20,"name":"Bob"},"amount":50,"tags":["x"]}
+         3 | {"user":{"id":10,"name":"Alice"},"amount":200,"tags":[]}
+         4 | {"user":{"id":30,"name":"Carol"},"amount":80,"tags":["y","z"]}</code></pre>
+
+    <h2>2. Mental model</h2>
+    <p>
+      Two shapes at work:
+    </p>
+    <ul>
+      <li><strong>Typed nested</strong> — parquet/ORC already has <code>STRUCT</code> / <code>ARRAY</code>. Use dot paths: <code>col("user.id")</code>.</li>
+      <li><strong>JSON string column</strong> — still text until you parse. Prefer <code>from_json</code> + schema when you need real types and nested fields. Use <code>get_json_object</code> for one quick path (returns string).</li>
+    </ul>
+    <pre><code>from pyspark.sql.functions import col, from_json, get_json_object, explode, explode_outer
+
+# already a struct
+col("user.id")
+col("user.name")
+
+# JSON string → typed struct
+schema = "user STRUCT&lt;id:INT, name:STRING&gt;, amount INT, tags ARRAY&lt;STRING&gt;"
+df.withColumn("p", from_json(col("raw"), schema))
+col("p.user.id")
+col("p.amount")
+col("p.tags")
+
+# one path, no schema (string out)
+get_json_object(col("raw"), "$.user.id")
+
+# array → rows
+explode(col("p.tags"))        # empty array drops the parent row
+explode_outer(col("p.tags"))  # empty array → one row, element null</code></pre>
+    <p>
+      Docs:
+      <a href="https://spark.apache.org/docs/latest/api/python/reference/pyspark.sql/api/pyspark.sql.functions.from_json.html">from_json</a> ·
+      <a href="https://spark.apache.org/docs/latest/api/python/reference/pyspark.sql/api/pyspark.sql.functions.get_json_object.html">get_json_object</a> ·
+      <a href="https://spark.apache.org/docs/latest/api/python/reference/pyspark.sql/api/pyspark.sql.functions.explode.html">explode</a> ·
+      <a href="https://spark.apache.org/docs/latest/api/python/reference/pyspark.sql/api/pyspark.sql.functions.explode_outer.html">explode_outer</a>
+    </p>
+
+    <h2>3. Core patterns (solution kit)</h2>
+
+    <h3>ex1 — struct field select</h3>
+    <pre><code>orders.select(
+    "order_id",
+    col("user.name").alias("name"),
+    "amount",
+)</code></pre>
+
+    <h3>ex2 — filter nested</h3>
+    <pre><code>(
+    orders.filter(col("user.id") == 10)
+          .select("order_id", col("user.name").alias("name"), "amount")
+)
+# order_id 1, 3</code></pre>
+
+    <h3>ex3 — from_json then project</h3>
+    <pre><code>schema = "user STRUCT&lt;id:INT, name:STRING&gt;, amount INT, tags ARRAY&lt;STRING&gt;"
+(
+    events.withColumn("p", from_json(col("raw"), schema))
+          .select(
+              "event_id",
+              col("p.user.id").alias("user_id"),
+              col("p.amount").alias("amount"),
+          )
+)</code></pre>
+
+    <h3>ex4 — get_json_object (no full schema)</h3>
+    <pre><code>events.select(
+    "event_id",
+    get_json_object(col("raw"), "$.user.id").cast("int").alias("user_id"),
+)
+# path is JSONPath; result is string until you cast</code></pre>
+
+    <h3>ex5 / ex6 — explode vs explode_outer</h3>
+    <pre><code># after from_json → p.tags
+.select("event_id", explode(col("p.tags")).alias("tag"))
+# event 3 (empty tags) disappears
+
+.select("event_id", explode_outer(col("p.tags")).alias("tag"))
+# event 3 stays, tag = null</code></pre>
+
+    <h3>ex7 — parse + filter</h3>
+    <pre><code># from_json, filter p.amount &gt;= 100, select event_id / user_id / amount
+# rows: (1, 10, 100), (3, 10, 200)</code></pre>
+
+    <h3>ex8 — parse + groupBy</h3>
+    <pre><code>(
+    events.withColumn("p", from_json(col("raw"), schema))
+          .groupBy(col("p.user.id").alias("user_id"))
+          .agg(sum("p.amount").alias("total"))
+)
+# 10→300, 20→50, 30→80</code></pre>
+
+    <h2>4. Traps (work)</h2>
+    <ul>
+      <li><code>from_json</code> needs a schema (DDL string or <code>StructType</code>). Bad JSON → null struct, not throw.</li>
+      <li><code>get_json_object</code> returns <strong>string</strong>. Cast when you need int/compare.</li>
+      <li>Dot path <code>col("user.id")</code> only works if <code>user</code> is already a struct — not if it is still a JSON string.</li>
+      <li><code>explode</code> drops empty/null arrays; <code>explode_outer</code> keeps the parent row.</li>
+      <li>After explode, row count grows — joins/aggs after flatten change grain.</li>
+    </ul>
+
+    <h2>5. Retrieval</h2>
+    <div id="q1"></div>
+    <div id="q2"></div>
+    <div id="q3"></div>
+
+    <h2>6. Cold write</h2>
+    <div id="drill1"></div>
+
+    <h2>7. Run</h2>
+    <pre><code>cd exercises
+../.venv/bin/python 13_nested_json.py</code></pre>
+    <p>
+      File: <code>exercises/13_nested_json.py</code> ·
+      Peek after try: <code>exercises/solutions/13_nested_json.py</code>
+    </p>
+
+    <div class="source">
+      <strong>Primary source:</strong>
+      <a href="https://spark.apache.org/docs/latest/api/python/reference/pyspark.sql/api/pyspark.sql.functions.from_json.html">from_json</a>
+      ·
+      <a href="https://spark.apache.org/docs/latest/api/python/reference/pyspark.sql/api/pyspark.sql.functions.get_json_object.html">get_json_object</a>
+      ·
+      <a href="https://spark.apache.org/docs/latest/api/python/reference/pyspark.sql/api/pyspark.sql.functions.explode.html">explode</a>
+    </div>
+
+    <div class="ask">
+      FAIL? Paste got vs expected. Say which step: struct path, from_json schema, get_json_object cast, explode vs outer, or groupBy after parse.
+      Ask the agent anything unclear — teacher is here.
+    </div>
+
+    <footer>
+      Prev: <a href="0012-capstone-mix.html">0012</a>
+      · Next: mix after this PASS (or Spark SQL interop)
+    </footer>
+  </div>
+  <script src="../assets/quiz.js"></script>
+  <script>
+    LessonUI.Quiz.mount("#q1", {
+      prompt: "Column raw is a JSON string. You need typed nested fields. Prefer…",
+      options: [
+        { text: "from_json with an explicit schema", correct: true, why: "Gives real types + struct/array access." },
+        { text: "col(\"raw.user.id\") on the string", correct: false, why: "Dot path needs a struct, not text." },
+        { text: "explode on raw without parsing", correct: false, why: "explode needs array/map, not JSON text." },
+        { text: "na.fill on raw then groupBy only", correct: false, why: "Does not parse nested JSON fields." },
+      ],
+    });
+    LessonUI.Quiz.mount("#q2", {
+      prompt: "get_json_object(col(\"raw\"), \"$.user.id\") returns…",
+      options: [
+        { text: "A string (cast if you need int)", correct: true, why: "JSONPath extract is string until cast." },
+        { text: "An INT always, no cast needed", correct: false, why: "Type is string; cast yourself." },
+        { text: "A STRUCT with nested fields", correct: false, why: "That is from_json territory." },
+        { text: "An ARRAY of all path matches", correct: false, why: "Single path extract, not explode." },
+      ],
+    });
+    LessonUI.Quiz.mount("#q3", {
+      prompt: "tags is empty []. explode vs explode_outer?",
+      options: [
+        { text: "explode drops row; outer keeps null", correct: true, why: "Outer preserves parent; explode removes it." },
+        { text: "Both drop the parent row always", correct: false, why: "Only explode drops empty arrays." },
+        { text: "Both keep parent with empty list", correct: false, why: "Neither leaves an empty list cell." },
+        { text: "Outer drops; explode keeps the row", correct: false, why: "Swapped — outer keeps, explode drops." },
+      ],
+    });
+    LessonUI.Drill.mount("#drill1", {
+      prompt: "parse raw with from_json(schema), select event_id and p.user.id as user_id",
+      accept: [
+        'events.withColumn("p", from_json(col("raw"), schema)).select("event_id", col("p.user.id").alias("user_id"))',
+        "events.withColumn('p', from_json(col('raw'), schema)).select('event_id', col('p.user.id').alias('user_id'))",
+        'df.withColumn("p", from_json(col("raw"), schema)).select("event_id", col("p.user.id").alias("user_id"))',
+        'events.withColumn("p", from_json("raw", schema)).select("event_id", col("p.user.id").alias("user_id"))',
+      ],
+      solution: 'events.withColumn("p", from_json(col("raw"), schema)).select("event_id", col("p.user.id").alias("user_id"))',
+    });
+  </script>
+</body>
+</html>
