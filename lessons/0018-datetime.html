@@ -11,7 +11,8 @@
     <nav class="crumbs">
       <a href="0016-sql-pipeline-mix.html">← 0016</a> ·
       <a href="../reference/dataframe-core-syntax.html">Reference</a> ·
-      <a href="../exercises/17_datetime.py">Exercises</a>
+      <a href="../exercises/17_datetime.py">Exercises</a> ·
+      <a href="0019-iso-parse.html">ISO parse?</a>
     </nav>
     <header>
       <p class="eyebrow">Lesson 0018 · stretch (new API)</p>
@@ -100,7 +101,7 @@ date_format(d, "dd-MM-yyyy")   # "15-01-2026"</code></pre>
 
     <h2>4. Knowledge → each exercise</h2>
 
-    <h3>ex1 — ISO parse, junk → null</h3>
+    <h3>ex1 — <a href="0019-iso-parse.html">ISO parse</a>, junk → null</h3>
     <pre><code>orders.select("order_id", try_to_date("sold_at", "yyyy-MM-dd").alias("sold"))
 # 1/2/3 dates; 4 and 5 null. to_date here would crash the job.</code></pre>
 
@@ -177,6 +178,7 @@ date_format(d, "dd-MM-yyyy")   # "15-01-2026"</code></pre>
     <footer>
       Prev mix: <a href="0016-sql-pipeline-mix.html">0016</a>
       · Unstuck window: <a href="0017-window-spec-then-rank.html">0017</a>
+      · Vocab: <a href="0019-iso-parse.html">0019 ISO parse</a>
       · Next after PASS: datetime + pipeline mix (optional)
     </footer>
   </div>

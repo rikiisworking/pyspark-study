@@ -1,0 +1,135 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>0019 · ISO parse</title>
+  <link rel="stylesheet" href="../assets/styles.css" />
+</head>
+<body>
+  <div class="wrap">
+    <nav class="crumbs">
+      <a href="0018-datetime.html">← 0018</a> ·
+      <a href="../reference/dataframe-core-syntax.html">Reference</a> ·
+      <a href="../exercises/17_datetime.py">ex4+</a>
+    </nav>
+    <header>
+      <p class="eyebrow">Lesson 0019 · vocabulary (not a new function)</p>
+      <h1>What “ISO parse” means</h1>
+      <p class="lede">It is shorthand in these drills, not a Spark API. Read a <code>YYYY-MM-DD</code> string into a date.</p>
+    </header>
+
+    <div class="win">
+      <strong>Win:</strong> When an exercise says “ISO-parse sold_at”, type <code>try_to_date("sold_at", "yyyy-MM-dd")</code> without looking it up.
+    </div>
+
+    <h2>1. ISO is a date <em>shape</em></h2>
+    <p>
+      <a href="https://www.iso.org/iso-8601-date-and-time-format.html">ISO 8601</a>
+      is the international date/time writing rule. ISO’s own summary: represent a calendar day as
+      <strong>YYYY-MM-DD</strong> — year, then month, then day. Example: 27 September 2022 is
+      <code>2022-09-27</code>.
+    </p>
+    <p>
+      Why it exists: <code>01/05/22</code> is January 5 or May 1 depending on country
+      (same ISO page). Year-first with hyphens is unambiguous and sorts as text
+      (<a href="https://www.rfc-editor.org/rfc/rfc3339#section-5.1">RFC 3339 §5.1</a> —
+      an Internet profile of ISO 8601 — notes that year-month-day strings order correctly).
+    </p>
+    <pre><code>2026-01-15     ISO date     (year-month-day)
+15/01/2026     EU day-first (not ISO)
+01/15/2026     US month-first (not ISO)
+2026-01-15 14:30:00   date + clock (ISO-like; needs a timestamp pattern)</code></pre>
+
+    <h2>2. Parse is the verb</h2>
+    <p>
+      The column is still a <strong>string</strong> until you convert it.
+      <em>Parse</em> = apply a pattern and get a Spark <code>DateType</code> (or null / error).
+      Pattern letters come from Spark’s
+      <a href="https://spark.apache.org/docs/latest/sql-ref-datetime-pattern.html">datetime pattern</a>
+      doc — <code>yyyy</code> year, <code>MM</code> month, <code>dd</code> day. Hyphens in the pattern
+      must match hyphens in the string.
+    </p>
+    <pre><code># "ISO parse" in 17_datetime.py  ≡
+try_to_date(col("sold_at"), "yyyy-MM-dd")
+
+# "EU parse" in this course      ≡
+try_to_date(col("sold_at"), "dd/MM/yyyy")</code></pre>
+    <p>
+      There is no function named <code>iso_parse</code>. The docstring is naming the
+      <em>pattern</em>, same as “ISO-parse shipped_at and sold_at” in ex5.
+    </p>
+
+    <h2>3. Your toy rows</h2>
+    <pre><code>sold_at        ISO parse (yyyy-MM-dd)
+2026-01-15     2026-01-15     ✓
+2026-01-31     2026-01-31     ✓
+2026-02-01     2026-02-01     ✓
+15/01/2026     null           (needs EU pattern)
+null           null</code></pre>
+    <p>
+      Row 4 is a real 15 Jan 2026, but not written as ISO — so an ISO parse
+      correctly returns null. That is why ex2 <code>coalesce</code>s ISO then EU.
+    </p>
+
+    <h2>4. Retrieval</h2>
+    <div id="q1"></div>
+    <div id="q2"></div>
+
+    <h2>5. Cold write</h2>
+    <div id="drill1"></div>
+
+    <p>Then go back to <a href="../exercises/17_datetime.py">ex4</a> — “ISO-parse sold_at” is this one line.</p>
+
+    <div class="source">
+      <strong>Primary source:</strong>
+      <a href="https://www.iso.org/iso-8601-date-and-time-format.html">ISO 8601 — Date and time format</a>
+      · profile:
+      <a href="https://www.rfc-editor.org/rfc/rfc3339">RFC 3339</a>
+      · Spark pattern:
+      <a href="https://spark.apache.org/docs/latest/sql-ref-datetime-pattern.html">datetime pattern</a>
+      · parse:
+      <a href="https://spark.apache.org/docs/latest/api/python/reference/pyspark.sql/api/pyspark.sql.functions.try_to_date.html">try_to_date</a>
+    </div>
+
+    <div class="ask">
+      Still fuzzy? Ask the agent — teacher is here. Then finish <code>17_datetime.py</code>.
+    </div>
+
+    <footer>
+      Back to API: <a href="0018-datetime.html">0018</a>
+    </footer>
+  </div>
+  <script src="../assets/quiz.js"></script>
+  <script>
+    LessonUI.Quiz.mount("#q1", {
+      prompt: "In these drills, “ISO-parse sold_at” means…",
+      options: [
+        { text: "try_to_date sold_at as yyyy-MM-dd", correct: true, why: "ISO calendar day is YYYY-MM-DD; Spark pattern yyyy-MM-dd." },
+        { text: "try_to_date sold_at as dd/MM/yyyy", correct: false, why: "That is the EU day-first pattern used on row 4." },
+        { text: "try_to_date sold_at as MM/dd/yyyy", correct: false, why: "US month-first. Not ISO, not this toy set." },
+        { text: "try_to_date sold_at as HH:mm:ss", correct: false, why: "That is a clock pattern, not a calendar date." },
+      ],
+    });
+    LessonUI.Quiz.mount("#q2", {
+      prompt: "Why does ISO parse of \"15/01/2026\" return null?",
+      options: [
+        { text: "String is day-first, not year-first", correct: true, why: "ISO wants 2026-01-15. try_to_date leaves a mismatch null." },
+        { text: "String is year-first, not day-first", correct: false, why: "15/01/2026 starts with the day, not the year." },
+        { text: "String is missing a clock and zone", correct: false, why: "A date parse does not require a time of day." },
+        { text: "String is valid ISO so it should pass", correct: false, why: "Slashes + day-first is not YYYY-MM-DD." },
+      ],
+    });
+    LessonUI.Drill.mount("#drill1", {
+      prompt: "ISO-parse sold_at (try_to_date, yyyy-MM-dd)",
+      accept: [
+        'try_to_date("sold_at", "yyyy-MM-dd")',
+        "try_to_date('sold_at', 'yyyy-MM-dd')",
+        'try_to_date(col("sold_at"), "yyyy-MM-dd")',
+        "try_to_date(col('sold_at'), 'yyyy-MM-dd')",
+      ],
+      solution: 'try_to_date("sold_at", "yyyy-MM-dd")',
+    });
+  </script>
+</body>
+</html>

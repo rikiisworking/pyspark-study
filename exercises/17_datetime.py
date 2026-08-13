@@ -47,7 +47,11 @@ def ex1_try_iso_sold(orders: DataFrame) -> DataFrame:
     try_to_date sold_at as yyyy-MM-dd.
     Columns: order_id, sold
     """
-    raise NotImplementedError
+    return (
+        orders
+            .withColumn("sold", try_to_date(col("sold_at"), "yyyy-MM-dd"))
+            .select("order_id", "sold")
+    )
 
 
 def ex2_coalesce_iso_eu(orders: DataFrame) -> DataFrame:
@@ -55,7 +59,14 @@ def ex2_coalesce_iso_eu(orders: DataFrame) -> DataFrame:
     sold = coalesce(ISO try_to_date, EU dd/MM/yyyy try_to_date).
     Columns: order_id, sold
     """
-    raise NotImplementedError
+    return (
+        orders
+            .withColumn("sold", coalesce(
+                try_to_date(col("sold_at"), "dd/MM/yyyy"),
+                try_to_date(col("sold_at"), "yyyy-MM-dd")
+                ))
+            .select("order_id", "sold")
+    )
 
 
 def ex3_parse_timestamp(orders: DataFrame) -> DataFrame:
@@ -63,7 +74,11 @@ def ex3_parse_timestamp(orders: DataFrame) -> DataFrame:
     to_timestamp ts with yyyy-MM-dd HH:mm:ss.
     Columns: order_id, sold_ts
     """
-    raise NotImplementedError
+    return (
+        orders
+            .withColumn("sold_ts", try_to_timestamp(col("ts"), lit("yyyy-MM-dd HH:mm:ss")))
+            .select("order_id", "sold_ts")
+    )
 
 
 def ex4_month_start(orders: DataFrame) -> DataFrame:
@@ -71,7 +86,16 @@ def ex4_month_start(orders: DataFrame) -> DataFrame:
     ISO-parse sold_at, date_trunc month, date_format yyyy-MM-dd.
     Columns: order_id, month_start
     """
-    raise NotImplementedError
+    return (
+        orders
+            .withColumn("sold_at", try_to_date(col("sold_at"), "yyyy-MM-dd"))
+            .withColumn(
+                "month_start", 
+                date_format(
+                    date_trunc("month",col("sold_at")), 
+                    "yyyy-MM-dd"))
+            .select("order_id", "month_start")
+    )
 
 
 def ex5_ship_lag_days(orders: DataFrame) -> DataFrame:
@@ -79,15 +103,26 @@ def ex5_ship_lag_days(orders: DataFrame) -> DataFrame:
     ISO-parse shipped_at and sold_at. datediff(shipped, sold).
     Columns: order_id, lag_days
     """
-    raise NotImplementedError
-
+    return (
+        orders
+            .withColumn("shipped_at", try_to_date(col("shipped_at"), "yyyy-MM-dd"))
+            .withColumn("sold_at", try_to_date(col("sold_at"), "yyyy-MM-dd"))
+            .withColumn("lag_days", datediff(col("shipped_at"), col("sold_at")))
+            .select("order_id", "lag_days")
+    )
 
 def ex6_year_month(orders: DataFrame) -> DataFrame:
     """
     ISO-parse sold_at → year as y, month as mo.
     Columns: order_id, y, mo
     """
-    raise NotImplementedError
+    return (
+        orders
+            .withColumn("sold_at", try_to_date(col("sold_at"), "yyyy-MM-dd"))
+            .withColumn("y", year(col("sold_at")))
+            .withColumn("mo", month(col("sold_at")))
+            .select("order_id", "y", "mo")
+    )
 
 
 def ex7_report_string(orders: DataFrame) -> DataFrame:
@@ -95,7 +130,14 @@ def ex7_report_string(orders: DataFrame) -> DataFrame:
     ISO-parse sold_at, date_format dd-MM-yyyy.
     Columns: order_id, sold_str
     """
-    raise NotImplementedError
+    return (
+        orders
+            .withColumn("sold_at", try_to_date(col("sold_at"), "yyyy-MM-dd"))
+            .withColumn("sold_str", date_format(
+                col("sold_at"), "dd-MM-yyyy"
+            ))
+            .select("order_id", "sold_str")
+    )
 
 
 def ex8_sum_by_month(orders: DataFrame) -> DataFrame:
@@ -103,7 +145,20 @@ def ex8_sum_by_month(orders: DataFrame) -> DataFrame:
     ISO-parse sold_at, drop null sold, month bucket yyyy-MM-dd, sum amount.
     Columns: month_start, total
     """
-    raise NotImplementedError
+    return (
+        orders
+            .withColumn("sold_at", try_to_date(col("sold_at"), "yyyy-MM-dd"))
+            .dropna(subset="sold_at")
+            .withColumn("month_start", date_format(
+                date_trunc("month", col("sold_at")),
+                "yyyy-MM-dd"
+            ))
+            .groupBy("month_start")
+            .agg(
+                sum("amount").alias("total")
+            )
+            .select("month_start", "total")
+    )
 
 
 # ---------------------------------------------------------------------------

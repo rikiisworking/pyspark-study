@@ -32,3 +32,5 @@
 - 0016 ex6 checker gap: SQL-only already matches expected bag (one open non-null order per name). filter(rn==1) is a no-op; extra `rn` column fails. Green ≠ window ran.
 - 0016 8/8. Core track closed. Stretch pick: datetime (0018 / 17_datetime.py)
 - Spark 4: to_date raises on junk; teach try_to_date. try_to_timestamp format needs lit().
+- “ISO parse” in 17_datetime = try_to_date(..., "yyyy-MM-dd"). Not a Spark fn. Vocab lesson 0019.
+- 17 datetime 8/8. ex3 was column (`sold_at` vs `ts`), not the API. Offer datetime+pipeline mix next.

@@ -33,7 +33,7 @@ You already own/write Spark pipelines at work, but cold-writing DataFrame API tr
 9b. SQL interop + pipeline mix — done
 
 ## Stretch (pick next)
-10. datetime (parse / trunc / diff) — in progress
+10. datetime (parse / trunc / diff) — done
 
 Core DF + nested + SQL interop is closed. Stretch started with dates (work-ticket stall).
 

@@ -27,7 +27,8 @@
       <a href="../lessons/0015-sql-interop.html">0015</a> ·
       <a href="../lessons/0016-sql-pipeline-mix.html">0016</a> ·
       <a href="../lessons/0017-window-spec-then-rank.html">0017</a> ·
-      <a href="../lessons/0018-datetime.html">0018</a>
+      <a href="../lessons/0018-datetime.html">0018</a> ·
+      <a href="../lessons/0019-iso-parse.html">0019</a>
     </nav>
     <header>
       <p class="eyebrow">Reference · print-friendly</p>
@@ -287,6 +288,7 @@ spark.catalog.dropGlobalTempView("orders_g")
 )
 
 # Spark 4: to_date raises on junk. Dirty strings → try_to_date (null).
+# "ISO parse" (this course) = try_to_date(..., "yyyy-MM-dd")  # ISO 8601 YYYY-MM-DD
 try_to_date(col("sold_at"), "yyyy-MM-dd")
 coalesce(try_to_date("sold_at", "yyyy-MM-dd"), try_to_date("sold_at", "dd/MM/yyyy"))
 
@@ -326,7 +328,8 @@ date_format(d, "dd-MM-yyyy")</code></pre>
       <a href="../lessons/0015-sql-interop.html">0015</a> ·
       <a href="../lessons/0016-sql-pipeline-mix.html">0016</a> ·
       <a href="../lessons/0017-window-spec-then-rank.html">0017</a> ·
-      <a href="../lessons/0018-datetime.html">0018</a>
+      <a href="../lessons/0018-datetime.html">0018</a> ·
+      <a href="../lessons/0019-iso-parse.html">0019</a>
     </footer>
   </div>
 </body>

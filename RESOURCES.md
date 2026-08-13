@@ -40,6 +40,10 @@
   API truth for views + SQL + expression fragments. Use for: lesson 0015 drills and reference.
 - [try_to_date](https://spark.apache.org/docs/latest/api/python/reference/pyspark.sql/api/pyspark.sql.functions.try_to_date.html) · [to_date](https://spark.apache.org/docs/latest/api/python/reference/pyspark.sql/api/pyspark.sql.functions.to_date.html) · [to_timestamp](https://spark.apache.org/docs/latest/api/python/reference/pyspark.sql/api/pyspark.sql.functions.to_timestamp.html) · [try_to_timestamp](https://spark.apache.org/docs/latest/api/python/reference/pyspark.sql/api/pyspark.sql.functions.try_to_timestamp.html)
   Parse strings. Spark 4: to_date raises on junk; try_to_date returns null. try_to_timestamp format is a Column (`lit`). Use for: lesson 0018.
+- [ISO 8601 — Date and time format](https://www.iso.org/iso-8601-date-and-time-format.html)
+  Official ISO summary: calendar day is YYYY-MM-DD. Use for: what “ISO” means in 0018/0019.
+- [RFC 3339](https://www.rfc-editor.org/rfc/rfc3339)
+  Internet profile of ISO 8601 (`full-date` = year-month-day). Use for: why year-first sorts and is unambiguous.
 - [Datetime pattern](https://spark.apache.org/docs/latest/sql-ref-datetime-pattern.html)
   Official pattern letters (yyyy, MM, dd, HH, mm, ss). Use for: format strings in 0018.
 - [date_trunc](https://spark.apache.org/docs/latest/api/python/reference/pyspark.sql/api/pyspark.sql.functions.date_trunc.html) · [datediff](https://spark.apache.org/docs/latest/api/python/reference/pyspark.sql/api/pyspark.sql.functions.datediff.html) · [date_format](https://spark.apache.org/docs/latest/api/python/reference/pyspark.sql/api/pyspark.sql.functions.date_format.html) · [year](https://spark.apache.org/docs/latest/api/python/reference/pyspark.sql/api/pyspark.sql.functions.year.html) · [month](https://spark.apache.org/docs/latest/api/python/reference/pyspark.sql/api/pyspark.sql.functions.month.html)
