@@ -35,9 +35,9 @@ You already own/write Spark pipelines at work, but cold-writing DataFrame API tr
 ## Stretch (pick next)
 10. datetime (parse / trunc / diff) — done
 10b. datetime + pipeline mix — done
-11. union / unionByName — in progress
+11. union / unionByName — done
 
-Core DF + nested + SQL interop is closed. Stretch: dates done; stacking extracts next.
+Core DF + nested + SQL interop is closed. Stretch: dates and unionByName done.
 
 ## Out of scope
 - Cluster ops, YARN/K8s, cost tuning (until syntax solid)

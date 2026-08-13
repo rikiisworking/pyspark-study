@@ -48,8 +48,9 @@ def ex1_union_aligned(east: DataFrame, west_aligned: DataFrame) -> DataFrame:
     Stack east then west_aligned with union (same column order).
     Columns: order_id, amount, status
     """
-    raise NotImplementedError
-
+    return (
+        east.union(west_aligned).select("order_id", "amount", "status")
+    )
 
 def ex2_union_shuffled_trap(east: DataFrame, west_shuf: DataFrame) -> DataFrame:
     """
@@ -57,15 +58,18 @@ def ex2_union_shuffled_trap(east: DataFrame, west_shuf: DataFrame) -> DataFrame:
     Do not unionByName. amount sits in order_id's seat.
     Columns: order_id, amount, status
     """
-    raise NotImplementedError
-
+    return (
+        east.union(west_shuf).select("order_id", "amount", "status")
+    )
 
 def ex3_union_by_name(east: DataFrame, west_shuf: DataFrame) -> DataFrame:
     """
     Stack east then west_shuf with unionByName.
     Columns: order_id, amount, status
     """
-    raise NotImplementedError
+    return (
+        east.unionByName(west_shuf)
+    )
 
 
 def ex4_union_by_name_distinct(
@@ -75,16 +79,18 @@ def ex4_union_by_name_distinct(
     unionByName east + west_aligned, then distinct (drop the twin row 4).
     Columns: order_id, amount, status
     """
-    raise NotImplementedError
-
+    return (
+        east.unionByName(west_aligned).distinct()
+    )
 
 def ex5_allow_missing(east: DataFrame, west_extra: DataFrame) -> DataFrame:
     """
     unionByName east + west_extra with allowMissingColumns=True.
     Columns: order_id, amount, status, region
     """
-    raise NotImplementedError
-
+    return (
+        east.unionByName(west_extra, allowMissingColumns=True)
+    )
 
 def ex6_chain_three(
     east: DataFrame, west_shuf: DataFrame, west_extra: DataFrame
@@ -93,23 +99,31 @@ def ex6_chain_three(
     east.unionByName(west_shuf) then unionByName(west_extra, allowMissingColumns=True).
     Columns: order_id, amount, status, region
     """
-    raise NotImplementedError
-
+    return (
+        east.unionByName(west_shuf)
+            .unionByName(west_extra, allowMissingColumns=True)
+    )
 
 def ex7_then_open(east: DataFrame, west_aligned: DataFrame) -> DataFrame:
     """
     unionByName east + west_aligned. Keep status == "open".
     Columns: order_id, amount, status
     """
-    raise NotImplementedError
-
+    return (
+        east.unionByName(west_aligned)
+            .filter(col("status") == "open")
+    )
 
 def ex8_tag_source(east: DataFrame, west_aligned: DataFrame) -> DataFrame:
     """
     Tag east src="east", west_aligned src="west", unionByName.
     Columns: order_id, src
     """
-    raise NotImplementedError
+    return (
+        east.withColumn("src", lit("east")).unionByName(
+            west_aligned.withColumn("src", lit("west"))
+        ).select("order_id", "src")
+    )
 
 
 # ---------------------------------------------------------------------------
