@@ -28,3 +28,7 @@
 - After nested track: SQL interop (0015) — mission “know when SQL is fine”
 - SQL interop traps: createOrReplaceTempView preferred; global_temp.qualify; spark.sql → DF; selectExpr no view
 - After SQL isolated PASS: mix 0016 — SQL↔DF both directions; re-hammer selectExpr; fill-before-sum; left+coalesce
+- 0016 ex6 stall: SQL + Window spec written, `w` unused — forgot row_number().over(w) + filter rn==1 (same as 07/08). Unstuck: 0017
+- 0016 ex6 checker gap: SQL-only already matches expected bag (one open non-null order per name). filter(rn==1) is a no-op; extra `rn` column fails. Green ≠ window ran.
+- 0016 8/8. Core track closed. Stretch pick: datetime (0018 / 17_datetime.py)
+- Spark 4: to_date raises on junk; teach try_to_date. try_to_timestamp format needs lit().

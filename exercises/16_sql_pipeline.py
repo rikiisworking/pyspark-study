@@ -53,8 +53,8 @@ def ex1_sql_open_select_expr(
     Then selectExpr amount * 2 AS double_amt.
     Columns: order_id, amount, double_amt
     """
-    raise NotImplementedError
-
+    orders.createOrReplaceTempView("orders")
+    return spark.sql("SELECT order_id, amount FROM orders WHERE status = 'open'").selectExpr("order_id", "amount", "amount * 2 AS double_amt")
 
 def ex2_sql_join_then_df_east(
     spark: SparkSession, orders: DataFrame, customers: DataFrame
@@ -64,8 +64,17 @@ def ex2_sql_join_then_df_east(
     Then DF: keep region == "east".
     Columns: order_id, name, amount, region
     """
-    raise NotImplementedError
+    orders.createOrReplaceTempView("orders")
+    customers.createOrReplaceTempView("customers")
 
+    return (
+        spark
+            .sql("""
+            SELECT order_id, name, amount, region
+            FROM orders
+            JOIN customers ON orders.cust_id = customers.cust_id""")
+            .filter(col("region")=="east")
+    )
 
 def ex3_sql_sum_then_filter_df(
     spark: SparkSession, orders: DataFrame
@@ -75,7 +84,17 @@ def ex3_sql_sum_then_filter_df(
     Then DF: total > 250.
     Columns: status, total
     """
-    raise NotImplementedError
+
+    orders.createOrReplaceTempView("orders")
+    return (
+        spark
+            .sql("""
+            SELECT status, SUM(amount) AS total
+            FROM orders
+            GROUP BY status
+            """)
+            .filter(col("total") > 250)
+    )
 
 
 def ex4_df_open_sql_inner_name(
@@ -86,7 +105,17 @@ def ex4_df_open_sql_inner_name(
     Register customers. SQL inner join on cust_id.
     Columns: order_id, name, amount
     """
-    raise NotImplementedError
+
+    orders.filter(col("status")=="open").createOrReplaceTempView("open_orders")
+    customers.createOrReplaceTempView("customers")
+    return (
+        spark
+            .sql("""
+            SELECT order_id, name, amount
+            FROM open_orders
+            JOIN customers ON open_orders.cust_id = customers.cust_id
+            """)
+    )
 
 
 def ex5_sql_left_coalesce_region(
@@ -97,8 +126,18 @@ def ex5_sql_left_coalesce_region(
     Then DF: region = coalesce(region, "unknown").
     Columns: order_id, name, region
     """
-    raise NotImplementedError
-
+    orders.createOrReplaceTempView("orders")
+    customers.createOrReplaceTempView("customers")
+    return (
+        spark
+            .sql("""
+            SELECT order_id, name, region
+            FROM orders
+            LEFT JOIN customers ON orders.cust_id = customers.cust_id
+            WHERE status = 'open'
+            """)
+            .withColumn("region", coalesce(col("region"), lit("unknown")))
+    )
 
 def ex6_sql_join_window_top(
     spark: SparkSession, orders: DataFrame, customers: DataFrame
@@ -108,7 +147,22 @@ def ex6_sql_join_window_top(
     Then DF window: top amount per name (ties → smaller order_id).
     Columns: order_id, name, amount
     """
-    raise NotImplementedError
+    orders.createOrReplaceTempView("orders")
+    customers.createOrReplaceTempView("customers")
+
+    w = Window.partitionBy("name").orderBy(col("amount").desc(), "order_id")
+    return (
+        spark
+            .sql("""
+            SELECT order_id, name, amount
+            FROM orders
+            INNER JOIN customers ON customers.cust_id = orders.cust_id
+            WHERE status = 'open' AND amount IS NOT NULL
+            """)
+            .withColumn("rn", row_number().over(w))
+            .filter(col("rn") == 1)
+            .select("order_id", "name", "amount")       
+    )
 
 
 def ex7_sql_fill_sum_by_region(
@@ -119,7 +173,25 @@ def ex7_sql_fill_sum_by_region(
     Then DF: fill amount 0, coalesce region "unknown", sum by region.
     Columns: region, total
     """
-    raise NotImplementedError
+    orders.createOrReplaceTempView("orders")
+    customers.createOrReplaceTempView("customers")
+
+    return (
+        spark
+            .sql("""
+            SELECT region, amount
+            FROM orders 
+            INNER JOIN customers ON orders.cust_id = customers.cust_id
+            WHERE status = 'open'
+            """)
+            .fillna({"amount":0})
+            .withColumn("region", coalesce(col("region"), lit("unknown")))
+            .groupBy("region")
+            .agg(
+                sum(col("amount")).alias("total")
+            )
+            .select("region", "total")
+    )
 
 
 def ex8_sql_open_parquet(
@@ -130,7 +202,14 @@ def ex8_sql_open_parquet(
     Write overwrite parquet to path, read back.
     Columns: order_id, cust_id, amount
     """
-    raise NotImplementedError
+    orders.createOrReplaceTempView("orders")
+    spark.sql("""
+        SELECT order_id, cust_id, amount
+        FROM orders
+        WHERE status = 'open'
+    """).write.mode("overwrite").parquet(path)
+
+    return spark.read.parquet(path)
 
 
 # ---------------------------------------------------------------------------

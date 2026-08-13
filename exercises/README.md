@@ -38,6 +38,7 @@ cd exercises
 | `14_nested_pipeline.py` | nested/JSON + join/fill/window/I/O mix | [0014 mix](../lessons/0014-nested-pipeline-mix.html) |
 | `15_sql_interop.py` | temp views, spark.sql, selectExpr, global_temp | [0015](../lessons/0015-sql-interop.html) |
 | `16_sql_pipeline.py` | SQL interop + join/fill/window/I/O mix | [0016 mix](../lessons/0016-sql-pipeline-mix.html) |
+| `17_datetime.py` | try_to_date, timestamp, date_trunc, datediff, year/month | [0018](../lessons/0018-datetime.html) |
 | `solutions/` | reference answers — after a real try | |
 
 Row order does not matter. Column **names and order** do.

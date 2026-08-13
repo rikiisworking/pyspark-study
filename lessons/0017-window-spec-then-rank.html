@@ -1,0 +1,151 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>0017 · Window spec then rank</title>
+  <link rel="stylesheet" href="../assets/styles.css" />
+</head>
+<body>
+  <div class="wrap">
+    <nav class="crumbs">
+      <a href="0016-sql-pipeline-mix.html">← 0016</a> ·
+      <a href="0007-window-functions.html">0007</a> ·
+      <a href="../reference/dataframe-core-syntax.html">Reference</a> ·
+      <a href="../exercises/16_sql_pipeline.py">ex6</a>
+    </nav>
+    <header>
+      <p class="eyebrow">Lesson 0017 · unstuck (not new API)</p>
+      <h1>A Window is a spec, not a rank</h1>
+      <p class="lede">ex6 SQL is done. <code>w = Window…</code> does not rank anything until you paint <code>row_number</code> on the DataFrame.</p>
+    </header>
+
+    <div class="win">
+      <strong>Win:</strong> Finish <code>ex6_sql_join_window_top</code> by chaining the same top-1 you already wrote in <a href="../exercises/08_window_pipeline.py">08</a>.
+    </div>
+
+    <h2>0. Where you are</h2>
+    <p>
+      You already: registered both views, filtered <code>open</code> + <code>amount IS NOT NULL</code> in SQL, inner-joined <code>name</code>, built
+      <code>Window.partitionBy("name").orderBy(col("amount").desc(), "order_id")</code>.
+    </p>
+    <p>
+      You then <em>return the SQL frame</em>. <code>w</code> is unused. Spark never ranks.
+      Official <a href="https://spark.apache.org/docs/latest/api/python/reference/pyspark.sql/api/pyspark.sql.Window.html">Window</a>
+      is “utility functions for <em>defining</em> window” — a spec object. Ranking is
+      <a href="https://spark.apache.org/docs/latest/api/python/reference/pyspark.sql/api/pyspark.sql.functions.row_number.html">row_number()</a>
+      applied with <code>.over(w)</code>.
+    </p>
+
+    <h2>1. Same 3 lines as 07 ex8 / 08 ex2</h2>
+    <pre><code># you already have `joined` (the spark.sql result) and `w`
+joined.withColumn("rn", row_number().over(w))  # paint ranks
+      .filter(col("rn") == 1)                  # keep top-1
+      .select("order_id", "name", "amount")    # drop rn (checker columns)</code></pre>
+    <p>
+      <code>row_number</code> “returns a sequential number starting at 1 within a window partition”
+      (<a href="https://spark.apache.org/docs/latest/api/python/reference/pyspark.sql/api/pyspark.sql.functions.row_number.html">docs</a>).
+      Ties are broken by your second <code>orderBy</code> key (smaller <code>order_id</code>).
+    </p>
+
+    <h2>2. Walk the toy rows</h2>
+    <p>After SQL (open, amount not null, inner):</p>
+    <pre><code>order_id  name   amount
+1         Alice  100     ← Alice closed 200 dropped
+2         Bob     50     ← Bob null amount dropped
+4         Carol  150     ← orphan 5 dropped by INNER</code></pre>
+    <p>
+      One row per name on this data — so <code>rn == 1</code> keeps all three. The window is still required: the checker wants the <em>pattern</em>, and the docstring says ties → smaller <code>order_id</code>.
+    </p>
+    <p>Expected: <code>(1, Alice, 100), (2, Bob, 50), (4, Carol, 150)</code>.</p>
+
+    <h2>2b. Why SQL-only also PASSes</h2>
+    <p>
+      The harness compares the <em>output bag</em> (column names + row tuples). It cannot see whether you called <code>row_number</code>.
+      After <code>open AND amount IS NOT NULL</code> + inner join, this toy set already is those three rows.
+      So returning the SQL frame green-lights ex6. <code>filter(rn == 1)</code> is a no-op here (every remaining name already has <code>rn = 1</code>).
+    </p>
+    <p>
+      If you stop at <code>.withColumn("rn", …)</code> and leave <code>rn</code> on the frame, the harness <em>fails</em> — extra column.
+      <code>select("order_id", "name", "amount")</code> is what makes a painted frame match the checker, not the filter.
+    </p>
+    <p>
+      At work the next load can have two open orders for Alice. Then SQL-only is wrong and <code>rn == 1</code> is the actual cut.
+    </p>
+
+    <h2>3. Retrieval</h2>
+    <div id="q1"></div>
+    <div id="q2"></div>
+    <div id="q3"></div>
+
+    <h2>4. Cold write the missing chain</h2>
+    <div id="drill1"></div>
+
+    <h2>5. Then go back</h2>
+    <pre><code>cd exercises
+../.venv/bin/python 16_sql_pipeline.py</code></pre>
+    <p>
+      Do not peek <code>exercises/solutions/16_sql_pipeline.py</code> until you have a real try.
+      You already wrote this chain in <a href="0007-window-functions.html">0007</a> ex8.
+    </p>
+
+    <div class="source">
+      <strong>Primary source:</strong>
+      <a href="https://spark.apache.org/docs/latest/api/python/reference/pyspark.sql/api/pyspark.sql.functions.row_number.html">row_number</a>
+      ·
+      <a href="https://spark.apache.org/docs/latest/api/python/reference/pyspark.sql/api/pyspark.sql.Window.html">Window</a>
+      · pattern already in
+      <a href="../reference/dataframe-core-syntax.html">dataframe-core-syntax</a>
+    </div>
+
+    <div class="ask">
+      Still stuck? Paste got vs expected. Ask the agent — teacher is here. After PASS, continue ex7–ex8.
+    </div>
+
+    <footer>
+      Back to mix: <a href="0016-sql-pipeline-mix.html">0016</a>
+      · Window review: <a href="0007-window-functions.html">0007</a>
+    </footer>
+  </div>
+  <script src="../assets/quiz.js"></script>
+  <script>
+    LessonUI.Quiz.mount("#q1", {
+      prompt: "w = Window.partitionBy(\"name\").orderBy(...) by itself…",
+      options: [
+        { text: "Window spec only, no ranks.", correct: true, why: "Window builds a spec. Nothing is ranked until a function .over(w) is added as a column." },
+        { text: "Assigning it ranks all rows", correct: false, why: "Assignment stores the spec. Spark does not scan or rank." },
+        { text: "Keeps just the winning row.", correct: false, why: "No filter happens until you write one." },
+        { text: "Creates a SQL window view.", correct: false, why: "Window is not a catalog object; views come from createOrReplaceTempView." },
+      ],
+    });
+    LessonUI.Quiz.mount("#q2", {
+      prompt: "After withColumn rn = row_number().over(w), top-1 is…",
+      options: [
+        { text: "Keep rows where rn is 1", correct: true, why: "row_number starts at 1 in each partition; filter that, then drop rn." },
+        { text: "Keep rows where amt is max", correct: false, why: "groupBy max collapses; window + filter keeps the full row." },
+        { text: "Keep rows where id is min", correct: false, why: "order_id is only the tie-break, not the winner rule." },
+        { text: "Keep rows where name unique", correct: false, why: "Uniqueness is not how you pick the top spend." },
+      ],
+    });
+    LessonUI.Quiz.mount("#q3", {
+      prompt: "orderBy amount desc, then order_id means…",
+      options: [
+        { text: "Highest amount wins, ties pick smaller id", correct: true, why: "desc amount first; asc order_id (default) breaks ties." },
+        { text: "Highest amount wins, ties pick a larger id", correct: false, why: "Default order on a column name is ascending." },
+        { text: "Lowest amount wins, ties pick smaller id.", correct: false, why: "desc puts the largest amount at rn=1." },
+        { text: "Lowest amount wins, ties pick a random id", correct: false, why: "row_number is deterministic once orderBy is complete." },
+      ],
+    });
+    LessonUI.Drill.mount("#drill1", {
+      prompt: "joined and w exist. Paint rn, keep rn==1, select order_id, name, amount",
+      accept: [
+        'joined.withColumn("rn", row_number().over(w)).filter(col("rn") == 1).select("order_id", "name", "amount")',
+        "joined.withColumn('rn', row_number().over(w)).filter(col('rn') == 1).select('order_id', 'name', 'amount')",
+        'joined.withColumn("rn", row_number().over(w)).filter(col("rn")==1).select("order_id","name","amount")',
+        'joined.withColumn("rn", row_number().over(w)) .filter(col("rn") == 1) .select("order_id", "name", "amount")',
+      ],
+      solution: 'joined.withColumn("rn", row_number().over(w)).filter(col("rn") == 1).select("order_id", "name", "amount")',
+    });
+  </script>
+</body>
+</html>

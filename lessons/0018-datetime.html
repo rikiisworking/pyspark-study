@@ -1,0 +1,224 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>0018 · datetime</title>
+  <link rel="stylesheet" href="../assets/styles.css" />
+</head>
+<body>
+  <div class="wrap">
+    <nav class="crumbs">
+      <a href="0016-sql-pipeline-mix.html">← 0016</a> ·
+      <a href="../reference/dataframe-core-syntax.html">Reference</a> ·
+      <a href="../exercises/17_datetime.py">Exercises</a>
+    </nav>
+    <header>
+      <p class="eyebrow">Lesson 0018 · stretch (new API)</p>
+      <h1>Parse, truncate, diff dates</h1>
+      <p class="lede">Tickets ship string dates. Spark 4 will <em>raise</em> on junk — parse soft, then trunc / diff / extract.</p>
+    </header>
+
+    <div class="win">
+      <strong>Win:</strong> Cold-write <code>try_to_date</code>, <code>to_timestamp</code>, <code>date_trunc</code>, <code>datediff(end, start)</code>, <code>year</code>/<code>month</code>, <code>date_format</code>. Finish <code>17_datetime.py</code>.
+    </div>
+
+    <h2>0. Map: knowledge → exercise</h2>
+    <pre><code>ex1  try_to_date sold_at ISO          → null on junk
+ex2  coalesce ISO + EU formats
+ex3  to_timestamp(ts, pattern)
+ex4  date_trunc month → date_format
+ex5  datediff(shipped, sold)
+ex6  year + month
+ex7  date_format report string
+ex8  parse → drop null sold → sum by month</code></pre>
+
+    <h2>1. Toy data</h2>
+    <pre><code>orders(order_id, sold_at, shipped_at, ts, amount)
+  1  2026-01-15   2026-01-20   2026-01-15 14:30:00   100
+  2  2026-01-31   2026-02-02   2026-01-31 09:00:00    50
+  3  2026-02-01   2026-02-01   2026-02-01 00:00:00   200
+  4  15/01/2026   2026-01-16   null                   80   ← EU
+  5  null         2026-01-10   null                   40</code></pre>
+
+    <h2>2. Spark 4 parse rule</h2>
+    <p>
+      <a href="https://spark.apache.org/docs/latest/api/python/reference/pyspark.sql/api/pyspark.sql.functions.to_date.html">to_date</a>
+      converts with an optional pattern from the
+      <a href="https://spark.apache.org/docs/latest/sql-ref-datetime-pattern.html">datetime pattern</a> doc
+      (<code>yyyy-MM-dd</code>, <code>dd/MM/yyyy</code>, <code>HH:mm:ss</code>).
+      On this Spark 4.2 session a mismatch <strong>throws</strong>
+      <code>DateTimeException: [CANNOT_PARSE_TIMESTAMP]</code> and tells you to use
+      <a href="https://spark.apache.org/docs/latest/api/python/reference/pyspark.sql/api/pyspark.sql.functions.try_to_date.html">try_to_date</a>
+      (new in 4.0) — “NULL instead of raising.”
+    </p>
+    <pre><code>from pyspark.sql.functions import (
+    col, lit, coalesce, try_to_date, to_timestamp, try_to_timestamp,
+    date_trunc, datediff, date_format, year, month, sum,
+)
+
+# dirty work column — do not use to_date
+try_to_date(col("sold_at"), "yyyy-MM-dd")          # row 4 → null
+try_to_date(col("sold_at"), "dd/MM/yyyy")          # row 4 → 2026-01-15
+
+# two formats on one column
+coalesce(
+    try_to_date(col("sold_at"), "yyyy-MM-dd"),
+    try_to_date(col("sold_at"), "dd/MM/yyyy"),
+)
+
+# timestamp: to_timestamp accepts a format string
+to_timestamp(col("ts"), "yyyy-MM-dd HH:mm:ss")
+
+# try_to_timestamp format is a Column — wrap lit (Spark 4)
+try_to_timestamp(col("ts"), lit("yyyy-MM-dd HH:mm:ss"))</code></pre>
+
+    <h2>3. After you have a date</h2>
+    <pre><code>d  = try_to_date(col("sold_at"), "yyyy-MM-dd")
+sh = try_to_date(col("shipped_at"), "yyyy-MM-dd")
+
+# date_trunc → timestamp at 00:00:00; format if you want a date-looking string
+# formats: year / month / day / week / quarter / hour / …
+date_format(date_trunc("month", d), "yyyy-MM-dd")   # 2026-01-01
+
+datediff(sh, d)    # days from start to end — datediff(end, start)
+# row1: 5; row2: 2; row3: 0; null if either side null
+
+year(d)            # 2026
+month(d)           # 1 or 2
+date_format(d, "dd-MM-yyyy")   # "15-01-2026"</code></pre>
+    <p>
+      Official:
+      <a href="https://spark.apache.org/docs/latest/api/python/reference/pyspark.sql/api/pyspark.sql.functions.date_trunc.html">date_trunc</a>
+      ·
+      <a href="https://spark.apache.org/docs/latest/api/python/reference/pyspark.sql/api/pyspark.sql.functions.datediff.html">datediff</a>
+      ·
+      <a href="https://spark.apache.org/docs/latest/api/python/reference/pyspark.sql/api/pyspark.sql.functions.year.html">year</a>
+      ·
+      <a href="https://spark.apache.org/docs/latest/api/python/reference/pyspark.sql/api/pyspark.sql.functions.date_format.html">date_format</a>
+    </p>
+
+    <h2>4. Knowledge → each exercise</h2>
+
+    <h3>ex1 — ISO parse, junk → null</h3>
+    <pre><code>orders.select("order_id", try_to_date("sold_at", "yyyy-MM-dd").alias("sold"))
+# 1/2/3 dates; 4 and 5 null. to_date here would crash the job.</code></pre>
+
+    <h3>ex2 — coalesce two patterns</h3>
+    <pre><code># ISO then EU → row 4 becomes 2026-01-15; row 5 still null</code></pre>
+
+    <h3>ex3 — timestamp</h3>
+    <pre><code>to_timestamp("ts", "yyyy-MM-dd HH:mm:ss").alias("sold_ts")
+# 1 → 2026-01-15 14:30:00; 4/5 null</code></pre>
+
+    <h3>ex4 — month bucket as string</h3>
+    <pre><code>date_format(date_trunc("month", try_to_date("sold_at", "yyyy-MM-dd")), "yyyy-MM-dd")
+# 1+2 → 2026-01-01; 3 → 2026-02-01; 4+5 → null</code></pre>
+
+    <h3>ex5 — ship lag days</h3>
+    <pre><code>datediff(try_to_date("shipped_at", "yyyy-MM-dd"),
+         try_to_date("sold_at", "yyyy-MM-dd"))
+# 5, 2, 0, null, null</code></pre>
+
+    <h3>ex6 — year, month</h3>
+    <pre><code># columns order_id, y, mo  — nulls on 4 and 5</code></pre>
+
+    <h3>ex7 — report string</h3>
+    <pre><code>date_format(try_to_date("sold_at", "yyyy-MM-dd"), "dd-MM-yyyy")
+# "15-01-2026", …, null, null</code></pre>
+
+    <h3>ex8 — month totals</h3>
+    <pre><code># ISO parse, drop null sold, groupBy month string, sum amount as total
+# 2026-01-01 → 150; 2026-02-01 → 200</code></pre>
+
+    <h2>5. Traps (work)</h2>
+    <ul>
+      <li>Spark 4 + dirty strings: <code>try_to_date</code>, not <code>to_date</code>.</li>
+      <li><code>try_to_timestamp(col, lit("pattern"))</code> — a bare format string is read as a <em>column name</em>.</li>
+      <li><code>datediff(end, start)</code> — backwards gives a negative (docs: “days from start to end”).</li>
+      <li><code>date_trunc</code> returns a <em>timestamp</em> (midnight). <code>date_format</code> if the checker wants <code>yyyy-MM-dd</code>.</li>
+      <li>A timestamp string does not parse as <code>yyyy-MM-dd</code> — include <code>HH:mm:ss</code> or use <code>to_timestamp</code>.</li>
+    </ul>
+
+    <h2>6. Retrieval</h2>
+    <div id="q1"></div>
+    <div id="q2"></div>
+    <div id="q3"></div>
+
+    <h2>7. Cold write</h2>
+    <div id="drill1"></div>
+
+    <h2>8. Run</h2>
+    <pre><code>cd exercises
+../.venv/bin/python 17_datetime.py</code></pre>
+    <p>
+      File: <code>exercises/17_datetime.py</code> ·
+      Peek after try: <code>exercises/solutions/17_datetime.py</code>
+    </p>
+
+    <div class="source">
+      <strong>Primary source:</strong>
+      <a href="https://spark.apache.org/docs/latest/api/python/reference/pyspark.sql/api/pyspark.sql.functions.try_to_date.html">try_to_date</a>
+      ·
+      <a href="https://spark.apache.org/docs/latest/api/python/reference/pyspark.sql/api/pyspark.sql.functions.to_date.html">to_date</a>
+      ·
+      <a href="https://spark.apache.org/docs/latest/sql-ref-datetime-pattern.html">datetime pattern</a>
+      ·
+      <a href="https://spark.apache.org/docs/latest/api/python/reference/pyspark.sql/api/pyspark.sql.functions.date_trunc.html">date_trunc</a>
+      ·
+      <a href="https://spark.apache.org/docs/latest/api/python/reference/pyspark.sql/api/pyspark.sql.functions.datediff.html">datediff</a>
+    </div>
+
+    <div class="ask">
+      FAIL? Paste got vs expected. Name the step: parse (try_ vs to_), format string, datediff argument order, trunc type, or lit on try_to_timestamp.
+      Ask the agent anything unclear — teacher is here.
+    </div>
+
+    <footer>
+      Prev mix: <a href="0016-sql-pipeline-mix.html">0016</a>
+      · Unstuck window: <a href="0017-window-spec-then-rank.html">0017</a>
+      · Next after PASS: datetime + pipeline mix (optional)
+    </footer>
+  </div>
+  <script src="../assets/quiz.js"></script>
+  <script>
+    LessonUI.Quiz.mount("#q1", {
+      prompt: "sold_at has '15/01/2026'. to_date(..., \"yyyy-MM-dd\") on Spark 4…",
+      options: [
+        { text: "Raises DateTimeException on mismatch", correct: true, why: "ANSI parse fails the job. try_to_date returns null instead." },
+        { text: "Returns a SQL null on a mismatch", correct: false, why: "That is try_to_date (4.0+), not to_date." },
+        { text: "Writes a zero date on mismatch", correct: false, why: "No silent epoch. It errors or nulls." },
+        { text: "Drops that one row on mismatch", correct: false, why: "Parse is per-cell, not a filter." },
+      ],
+    });
+    LessonUI.Quiz.mount("#q2", {
+      prompt: "datediff(shipped, sold) returns…",
+      options: [
+        { text: "Days from sold toward shipped", correct: true, why: "datediff(end, start) = days from start to end." },
+        { text: "Days from shipped toward sold", correct: false, why: "That is datediff(sold, shipped) — sign flips." },
+        { text: "Hours from sold toward shipped", correct: false, why: "datediff is whole days, not hours." },
+        { text: "Months from sold toward shipped", correct: false, why: "Use months_between / date_trunc for months." },
+      ],
+    });
+    LessonUI.Quiz.mount("#q3", {
+      prompt: "try_to_timestamp(col(\"ts\"), \"yyyy-MM-dd HH:mm:ss\") fails because…",
+      options: [
+        { text: "Format is a column; wrap with lit", correct: true, why: "Spark 4 treats the second arg as a column name unless it is a Column (lit)." },
+        { text: "Format is a string; drop the lit", correct: false, why: "That works for to_timestamp, not try_to_timestamp." },
+        { text: "Format needs slashes not dashes now", correct: false, why: "Pattern letters are yyyy-MM-dd; separators follow the data." },
+        { text: "Format must use epoch then to_date", correct: false, why: "No unix hop required for a patterned timestamp." },
+      ],
+    });
+    LessonUI.Drill.mount("#drill1", {
+      prompt: "orders.select order_id and try_to_date(sold_at, yyyy-MM-dd) AS sold",
+      accept: [
+        'orders.select("order_id", try_to_date("sold_at", "yyyy-MM-dd").alias("sold"))',
+        "orders.select('order_id', try_to_date('sold_at', 'yyyy-MM-dd').alias('sold'))",
+        'orders.select("order_id", try_to_date(col("sold_at"), "yyyy-MM-dd").alias("sold"))',
+        "orders.select('order_id', try_to_date(col('sold_at'), 'yyyy-MM-dd').alias('sold'))",
+      ],
+      solution: 'orders.select("order_id", try_to_date("sold_at", "yyyy-MM-dd").alias("sold"))',
+    });
+  </script>
+</body>
+</html>

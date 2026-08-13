@@ -25,7 +25,9 @@
       <a href="../lessons/0013-nested-json.html">0013</a> ·
       <a href="../lessons/0014-nested-pipeline-mix.html">0014</a> ·
       <a href="../lessons/0015-sql-interop.html">0015</a> ·
-      <a href="../lessons/0016-sql-pipeline-mix.html">0016</a>
+      <a href="../lessons/0016-sql-pipeline-mix.html">0016</a> ·
+      <a href="../lessons/0017-window-spec-then-rank.html">0017</a> ·
+      <a href="../lessons/0018-datetime.html">0018</a>
     </nav>
     <header>
       <p class="eyebrow">Reference · print-friendly</p>
@@ -278,6 +280,33 @@ spark.catalog.dropGlobalTempView("orders_g")
     </p>
     <p>Same Catalyst planner as DF API. Prefer DF for owned pipelines; SQL for explore / teammate SQL / clear multi-join CTEs.</p>
 
+    <h2>Datetime</h2>
+    <pre><code>from pyspark.sql.functions import (
+    try_to_date, to_date, to_timestamp, try_to_timestamp, lit, coalesce,
+    date_trunc, datediff, date_format, year, month,
+)
+
+# Spark 4: to_date raises on junk. Dirty strings → try_to_date (null).
+try_to_date(col("sold_at"), "yyyy-MM-dd")
+coalesce(try_to_date("sold_at", "yyyy-MM-dd"), try_to_date("sold_at", "dd/MM/yyyy"))
+
+to_timestamp(col("ts"), "yyyy-MM-dd HH:mm:ss")
+try_to_timestamp(col("ts"), lit("yyyy-MM-dd HH:mm:ss"))  # format is a Column
+
+date_format(date_trunc("month", d), "yyyy-MM-dd")  # trunc → timestamp midnight
+datediff(end, start)   # whole days from start to end
+year(d); month(d)
+date_format(d, "dd-MM-yyyy")</code></pre>
+    <p>
+      <a href="https://spark.apache.org/docs/latest/api/python/reference/pyspark.sql/api/pyspark.sql.functions.try_to_date.html">try_to_date</a>
+      ·
+      <a href="https://spark.apache.org/docs/latest/sql-ref-datetime-pattern.html">pattern</a>
+      ·
+      <a href="https://spark.apache.org/docs/latest/api/python/reference/pyspark.sql/api/pyspark.sql.functions.date_trunc.html">date_trunc</a>
+      ·
+      <a href="https://spark.apache.org/docs/latest/api/python/reference/pyspark.sql/api/pyspark.sql.functions.datediff.html">datediff</a>
+    </p>
+
     <footer>
       Lessons:
       <a href="../lessons/0001-filter-select-cold.html">0001</a> ·
@@ -295,7 +324,9 @@ spark.catalog.dropGlobalTempView("orders_g")
       <a href="../lessons/0013-nested-json.html">0013</a> ·
       <a href="../lessons/0014-nested-pipeline-mix.html">0014</a> ·
       <a href="../lessons/0015-sql-interop.html">0015</a> ·
-      <a href="../lessons/0016-sql-pipeline-mix.html">0016</a>
+      <a href="../lessons/0016-sql-pipeline-mix.html">0016</a> ·
+      <a href="../lessons/0017-window-spec-then-rank.html">0017</a> ·
+      <a href="../lessons/0018-datetime.html">0018</a>
     </footer>
   </div>
 </body>
