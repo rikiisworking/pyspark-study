@@ -147,7 +147,7 @@ def ex6_window_top_per_month(orders: DataFrame) -> DataFrame:
     Window: top amount per month_start (ties → smaller order_id).
     Columns: order_id, month_start, amount
     """
-    w = Window.partitionBy("month_start").orderBy("order_id")
+    w = Window.partitionBy("month_start").orderBy(col("amount").desc(), col("order_id"))
     return (
         orders
             .withColumn(
