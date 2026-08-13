@@ -52,6 +52,7 @@ cd exercises
 | 9 | Spark SQL interop | [0015](lessons/0015-sql-interop.html) | `15_sql_interop.py` |
 | 9b | SQL + pipeline mix | [0016](lessons/0016-sql-pipeline-mix.html) | `16_sql_pipeline.py` |
 | 10 | datetime | [0018](lessons/0018-datetime.html) | `17_datetime.py` |
+| 10b | datetime + pipeline mix | [0020](lessons/0020-datetime-pipeline-mix.html) | `18_datetime_pipeline.py` |
 
 ## Layout
 

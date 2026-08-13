@@ -7,4 +7,4 @@ User completed `17_datetime` green: try_to_date ISO, coalesce ISO+EU, to/try_to_
 - ex2 `coalesce` is EU then ISO (docstring said ISO then EU). Same bag — one pattern always nulls.
 - Asked what “ISO parse” means; then used `try_to_date(..., "yyyy-MM-dd")` correctly in ex4–ex8.
 
-Implications: stretch item 10 (datetime) demonstrated. Optional next: datetime + pipeline mix (filter/join/window/I/O) before another new API.
+Implications: stretch item 10 (datetime) demonstrated. Mix closed in LR-0020.

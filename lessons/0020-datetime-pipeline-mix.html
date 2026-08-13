@@ -1,0 +1,210 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>0020 · datetime + pipeline mix</title>
+  <link rel="stylesheet" href="../assets/styles.css" />
+</head>
+<body>
+  <div class="wrap">
+    <nav class="crumbs">
+      <a href="0018-datetime.html">← 0018</a> ·
+      <a href="0019-iso-parse.html">ISO parse</a> ·
+      <a href="../reference/dataframe-core-syntax.html">Reference</a> ·
+      <a href="../exercises/18_datetime_pipeline.py">Exercises</a>
+    </nav>
+    <header>
+      <p class="eyebrow">Lesson 0020 · integration (not new API)</p>
+      <h1>Datetime + pipeline mix</h1>
+      <p class="lede">Parse once, then filter / join / window / write — same ticket grain as work.</p>
+    </header>
+
+    <div class="win">
+      <strong>Win:</strong> Finish <code>18_datetime_pipeline.py</code> cold-ish. Dates are a step, not a separate world. Re-hit <a href="0019-iso-parse.html">ISO parse</a> and the <code>ts</code> column.
+    </div>
+
+    <h2>0. Why this exists</h2>
+    <p>
+      You passed isolated datetime (<a href="0018-datetime.html">0018</a>). Storage strength = interleave parse with filter, join, fill, groupBy, window, parquet.
+      Same pattern as <a href="0014-nested-pipeline-mix.html">0014</a> / <a href="0016-sql-pipeline-mix.html">0016</a>.
+      Also closes the 0018 gap: clock lives in <code>ts</code>, not <code>sold_at</code>.
+    </p>
+
+    <h2>1. Toolbox (all you need)</h2>
+    <pre><code>from pyspark.sql import Window
+from pyspark.sql.functions import (
+    col, coalesce, lit, sum, row_number,
+    try_to_date, try_to_timestamp,
+    date_trunc, datediff, date_format,
+)
+
+# parse early — dirty work column, then treat as a date
+.withColumn("sold", try_to_date(col("sold_at"), "yyyy-MM-dd"))   # ISO parse
+coalesce(try_to_date("sold_at", "yyyy-MM-dd"),
+         try_to_date("sold_at", "dd/MM/yyyy"))                   # ISO then EU
+
+# clock: ts, not sold_at. try_to_timestamp format is a Column
+try_to_timestamp(col("ts"), lit("yyyy-MM-dd HH:mm:ss"))
+
+# you already know these after 0018
+.filter((col("status") == "open") & (col("sold") > "2026-01-10"))
+.join(customers, "cust_id")                       # inner
+.na.fill({"amount": 0})
+date_format(date_trunc("month", col("sold")), "yyyy-MM-dd")
+datediff(col("shipped"), col("sold"))             # end, start
+Window.partitionBy("month_start").orderBy(col("amount").desc(), col("order_id"))
+.write.mode("overwrite").parquet(path)
+spark.read.parquet(path)</code></pre>
+    <p>
+      Ref: <a href="../reference/dataframe-core-syntax.html">dataframe-core-syntax</a> ·
+      <a href="0018-datetime.html">0018</a> ·
+      <a href="0019-iso-parse.html">0019</a>
+    </p>
+
+    <h2>2. Data for the drills</h2>
+    <pre><code>orders(order_id, cust_id, sold_at, shipped_at, ts, amount, status)
+  1  10  2026-01-15   2026-01-20   2026-01-15 14:30:00   100  open
+  2  20  2026-01-31   2026-02-02   2026-01-31 09:00:00    50  open
+  3  10  2026-02-01   2026-02-01   2026-02-01 00:00:00   200  closed
+  4  30  15/01/2026   2026-01-16   null                   80  open   ← EU
+  5  99  null         2026-01-10   null                   40  open   ← orphan
+  6  20  2026-01-10   2026-01-12   2026-01-10 08:00:00   null open   ← null amt
+  7  30  2026-02-15   2026-02-18   2026-02-15 12:00:00   150  open
+
+customers(cust_id, name, region)
+  10 Alice east
+  20 Bob   null
+  30 Carol east
+  40 Dan   north       ← no orders</code></pre>
+
+    <h2>3. Knowledge → each exercise</h2>
+
+    <h3>ex1 — ISO parse → filter</h3>
+    <pre><code># sold = try_to_date(sold_at, "yyyy-MM-dd")
+# open AND sold > 2026-01-10
+# 1 and 2 and 7. Row 4 EU → sold null → drops. Row 6 is = not &gt;.</code></pre>
+
+    <h3>ex2 — ISO parse → drop null sold → inner name</h3>
+    <pre><code># drops 4 (EU) and 5 (null). Inner drops nobody else (5 already gone).
+# (1 Alice), (2 Bob), (3 Alice), (6 Bob), (7 Carol)</code></pre>
+
+    <h3>ex3 — coalesce ISO+EU → east</h3>
+    <pre><code># row 4 becomes 2026-01-15. Inner + region == "east"
+# Alice 1+3, Carol 4+7. Bob null region is not east.</code></pre>
+
+    <h3>ex4 — datediff → lag &gt; 2</h3>
+    <pre><code>datediff(ISO shipped, ISO sold)   # 5, 2, 0, null, null, 2, 3
+# keep &gt; 2 → (1, 5), (7, 3)</code></pre>
+
+    <h3>ex5 — timestamp is <code>ts</code></h3>
+    <pre><code>try_to_timestamp(col("ts"), lit("yyyy-MM-dd HH:mm:ss"))
+# sold_at has no HH:mm:ss — that parse is all null (0018 ex3 stall).
+# drop null sold_ts → 1, 2, 3, 6, 7</code></pre>
+
+    <h3>ex6 — window top per month</h3>
+    <pre><code># ISO parse, drop null sold AND null amount, month_start string
+# Window.partitionBy("month_start").orderBy(amount desc, order_id)
+# rn == 1 → Jan 1/100, Feb 3/200</code></pre>
+
+    <h3>ex7 — fill → sum by month</h3>
+    <pre><code># ISO parse, inner join (orphan 5 gone), fill amount 0, drop null sold
+# Jan: 100+50+0 = 150; Feb: 200+150 = 350
+# EU row 4 still null sold → out</code></pre>
+
+    <h3>ex8 — ISO parse → parquet roundtrip</h3>
+    <pre><code># select order_id, sold; write.mode("overwrite").parquet(path); read
+# includes null sold on 4 and 5</code></pre>
+
+    <h2>4. Traps (work)</h2>
+    <ul>
+      <li><strong>Parse early.</strong> Filter/join/trunc on the date column, not the raw string.</li>
+      <li><a href="0019-iso-parse.html">ISO parse</a> leaves EU <code>15/01/2026</code> null. Coalesce if both formats are legal.</li>
+      <li>Null sold fails <code>&gt;</code> — the row drops. That is three-valued logic, not a crash.</li>
+      <li>Clock is <code>ts</code>. <code>sold_at</code> is a calendar day.</li>
+      <li><code>try_to_timestamp(..., lit("pattern"))</code> — bare string is a column name.</li>
+      <li><code>datediff(end, start)</code>. Fill amount before sum if null must count as 0 (ex7).</li>
+    </ul>
+
+    <h2>5. Retrieval</h2>
+    <div id="q1"></div>
+    <div id="q2"></div>
+    <div id="q3"></div>
+
+    <h2>6. Cold write</h2>
+    <div id="drill1"></div>
+
+    <h2>7. Run</h2>
+    <pre><code>cd exercises
+../.venv/bin/python 18_datetime_pipeline.py</code></pre>
+    <p>
+      File: <code>exercises/18_datetime_pipeline.py</code> ·
+      Peek after try: <code>exercises/solutions/18_datetime_pipeline.py</code>
+    </p>
+
+    <div class="source">
+      <strong>Primary source:</strong>
+      <a href="https://spark.apache.org/docs/latest/api/python/reference/pyspark.sql/api/pyspark.sql.functions.try_to_date.html">try_to_date</a>
+      ·
+      <a href="0019-iso-parse.html">ISO parse (this course)</a>
+      · compose with
+      <a href="https://spark.apache.org/docs/latest/api/python/reference/pyspark.sql/api/pyspark.sql.DataFrame.filter.html">filter</a>
+      ·
+      <a href="https://spark.apache.org/docs/latest/api/python/reference/pyspark.sql/api/pyspark.sql.DataFrame.join.html">join</a>
+      ·
+      <a href="https://spark.apache.org/docs/latest/api/python/reference/pyspark.sql/api/pyspark.sql.Window.html">Window</a>
+    </div>
+
+    <div class="ask">
+      FAIL? Paste got vs expected. Name the step: ISO vs EU, sold_at vs ts, datediff order, fill-before-sum, window rank, or write.
+      Ask the agent anything unclear — teacher is here.
+    </div>
+
+    <footer>
+      Prev: <a href="0018-datetime.html">0018</a>
+      · Vocab: <a href="0019-iso-parse.html">0019 ISO parse</a>
+      · Unstuck window: <a href="0017-window-spec-then-rank.html">0017</a>
+    </footer>
+  </div>
+  <script src="../assets/quiz.js"></script>
+  <script>
+    LessonUI.Quiz.mount("#q1", {
+      prompt: "ISO-parse then sold > 2026-01-10. Row 4 is 15/01/2026. That row…",
+      options: [
+        { text: "Drops; sold is still null", correct: true, why: "ISO parse does not read day-first. Null fails >." },
+        { text: "Stays; Spark rewrites as ISO", correct: false, why: "No silent rewrite. Coalesce if EU is allowed." },
+        { text: "Crashes; to_date still runs", correct: false, why: "try_to_date nulls. The filter just drops." },
+        { text: "Stays; null beats the cutoff", correct: false, why: "Unknown > date is unknown → row out." },
+      ],
+    });
+    LessonUI.Quiz.mount("#q2", {
+      prompt: "Need 14:30 on row 1. Parse…",
+      options: [
+        { text: "Parse ts, wrap with lit", correct: true, why: "Clock is ts. try_to_timestamp format is a Column." },
+        { text: "Parse sold_at, skip the lit", correct: false, why: "sold_at has no HH:mm:ss — that was the 0018 stall." },
+        { text: "Parse shipped_at, skip the lit", correct: false, why: "shipped_at is a calendar day, not the clock." },
+        { text: "Parse amount, wrap with lit", correct: false, why: "amount is money, not a timestamp." },
+      ],
+    });
+    LessonUI.Quiz.mount("#q3", {
+      prompt: "Null amount must count as 0 in the month total. Do…",
+      options: [
+        { text: "Fill amount zero then group", correct: true, why: "sum skips nulls. Fill first so Bob’s 0 is in January." },
+        { text: "Group first then fill amount", correct: false, why: "Too late — that null never entered the sum." },
+        { text: "Drop month then fill amount", correct: false, why: "You still need the month bucket." },
+        { text: "Fill month then drop amount", correct: false, why: "Wrong column. Keep amount; fill it." },
+      ],
+    });
+    LessonUI.Drill.mount("#drill1", {
+      prompt: "ISO-parse sold_at as sold; keep open and sold > 2026-01-10; select order_id, sold",
+      accept: [
+        'orders.withColumn("sold", try_to_date(col("sold_at"), "yyyy-MM-dd")).filter((col("status") == "open") & (col("sold") > "2026-01-10")).select("order_id", "sold")',
+        "orders.withColumn('sold', try_to_date(col('sold_at'), 'yyyy-MM-dd')).filter((col('status') == 'open') & (col('sold') > '2026-01-10')).select('order_id', 'sold')",
+        'orders.withColumn("sold", try_to_date("sold_at", "yyyy-MM-dd")).filter((col("status") == "open") & (col("sold") > "2026-01-10")).select("order_id", "sold")',
+        "orders.withColumn('sold', try_to_date('sold_at', 'yyyy-MM-dd')).filter((col('status') == 'open') & (col('sold') > '2026-01-10')).select('order_id', 'sold')",
+      ],
+      solution: 'orders.withColumn("sold", try_to_date(col("sold_at"), "yyyy-MM-dd")).filter((col("status") == "open") & (col("sold") > "2026-01-10")).select("order_id", "sold")',
+    });
+  </script>
+</body>
+</html>
