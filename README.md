@@ -53,6 +53,7 @@ cd exercises
 | 9b | SQL + pipeline mix | [0016](lessons/0016-sql-pipeline-mix.html) | `16_sql_pipeline.py` |
 | 10 | datetime | [0018](lessons/0018-datetime.html) | `17_datetime.py` |
 | 10b | datetime + pipeline mix | [0020](lessons/0020-datetime-pipeline-mix.html) | `18_datetime_pipeline.py` |
+| 11 | union / unionByName | [0021](lessons/0021-union-by-name.html) | `19_union.py` |
 
 ## Layout
 

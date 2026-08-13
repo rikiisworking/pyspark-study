@@ -1,0 +1,205 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>0021 · union by name</title>
+  <link rel="stylesheet" href="../assets/styles.css" />
+</head>
+<body>
+  <div class="wrap">
+    <nav class="crumbs">
+      <a href="0020-datetime-pipeline-mix.html">← 0020</a> ·
+      <a href="../reference/dataframe-core-syntax.html">Reference</a> ·
+      <a href="../exercises/19_union.py">Exercises</a>
+    </nav>
+    <header>
+      <p class="eyebrow">Lesson 0021 · stretch (new API)</p>
+      <h1>Stack frames by name</h1>
+      <p class="lede">Two extracts, one report. <code>union</code> seats columns left-to-right. Work files shuffle names — use <code>unionByName</code>.</p>
+    </header>
+
+    <div class="win">
+      <strong>Win:</strong> Cold-write <code>union</code>, <code>unionByName</code>, <code>allowMissingColumns=True</code>, <code>distinct</code>. Finish <code>19_union.py</code>.
+    </div>
+
+    <h2>0. Map: knowledge → exercise</h2>
+    <pre><code>ex1  union same column order          → keeps both row 4s
+ex2  union shuffled seats             → amount lands in order_id
+ex3  unionByName shuffled             → names line up
+ex4  unionByName + distinct           → one row 4
+ex5  allowMissingColumns              → extra region, nulls on east
+ex6  chain three frames
+ex7  unionByName then filter open
+ex8  tag src, then unionByName</code></pre>
+
+    <h2>1. Toy data</h2>
+    <pre><code>east(order_id, amount, status)
+  1  100  open
+  2   50  open
+  3  200  closed
+  4   80  open
+
+west_aligned(order_id, amount, status)     # same seats
+  4   80  open     ← twin of east 4
+  5   40  open
+  6  150  closed
+
+west_shuf(amount, order_id, status)        # same names, swapped seats
+  80  4  open
+  40  5  open
+  150 6  closed
+
+west_extra(..., region)                    # one more column
+  7  90  open  north</code></pre>
+
+    <h2>2. Position vs name</h2>
+    <p>
+      <a href="https://spark.apache.org/docs/latest/api/python/reference/pyspark.sql/api/pyspark.sql.DataFrame.union.html">union</a>
+      is SQL <code>UNION ALL</code>: “resolves columns by <strong>position</strong> (not by name).”
+      No automatic dedup — add
+      <a href="https://spark.apache.org/docs/latest/api/python/reference/pyspark.sql/api/pyspark.sql.DataFrame.distinct.html">distinct</a>
+      if you want a set.
+      <a href="https://spark.apache.org/docs/latest/api/python/reference/pyspark.sql/api/pyspark.sql.DataFrame.unionAll.html">unionAll</a>
+      is an alias of <code>union</code>.
+    </p>
+    <pre><code>east.union(west_aligned)     # fine when seats match
+east.union(west_shuf)        # types match, *meanings* swap
+# west amount 80 sits in east's order_id seat → (80, 4, open)</code></pre>
+    <p>
+      <a href="https://spark.apache.org/docs/latest/api/python/reference/pyspark.sql/api/pyspark.sql.DataFrame.unionByName.html">unionByName</a>
+      “resolving columns by name.” Default
+      <code>allowMissingColumns=False</code> (3.1+): extra / missing name → raise.
+      <code>True</code>: fill the hole with null. Left column order wins; new names append.
+    </p>
+    <pre><code>east.unionByName(west_shuf)
+east.unionByName(west_extra, allowMissingColumns=True)
+# order_id, amount, status, region
+# east rows → region null; west_extra 7 / north</code></pre>
+
+    <h2>3. After you have one frame</h2>
+    <pre><code># still a DataFrame — filter / select as usual
+east.unionByName(west_aligned).filter(col("status") == "open")
+
+# tag source *before* the stack (work ticket)
+east.withColumn("src", lit("east")).unionByName(
+    west_aligned.withColumn("src", lit("west"))
+)</code></pre>
+
+    <h2>4. Knowledge → each exercise</h2>
+
+    <h3>ex1 — aligned union</h3>
+    <pre><code>east.union(west_aligned)
+# 7 rows. Two (4, 80, open). Names stay east's.</code></pre>
+
+    <h3>ex2 — the seat trap</h3>
+    <pre><code>east.union(west_shuf)    # NOT unionByName
+# last three rows: (80, 4, open), (40, 5, open), (150, 6, closed)</code></pre>
+
+    <h3>ex3 — same files, by name</h3>
+    <pre><code>east.unionByName(west_shuf)
+# last three: (4, 80, open), (5, 40, open), (6, 150, closed)</code></pre>
+
+    <h3>ex4 — set, not bag</h3>
+    <pre><code>east.unionByName(west_aligned).distinct()
+# one (4, 80, open)</code></pre>
+
+    <h3>ex5 — schema drift</h3>
+    <pre><code>east.unionByName(west_extra, allowMissingColumns=True)
+# 4 east + row 7. region null on east.</code></pre>
+
+    <h3>ex6 — chain</h3>
+    <pre><code>east.unionByName(west_shuf).unionByName(west_extra, allowMissingColumns=True)
+# 4 + 3 + 1. Two row-4s. region only on 7.</code></pre>
+
+    <h3>ex7 — then filter</h3>
+    <pre><code># open only. Both row 4s stay (east + west).</code></pre>
+
+    <h3>ex8 — tag source</h3>
+    <pre><code># columns order_id, src. 4 is east *and* west.</code></pre>
+
+    <h2>5. Traps (work)</h2>
+    <ul>
+      <li><code>union</code> = position. Same types + shuffled names silently swap meaning.</li>
+      <li>Default work call: <code>unionByName</code>. Add <code>allowMissingColumns=True</code> when a file grew a column.</li>
+      <li>Neither call distincts. Twin extracts keep twin rows until <code>distinct</code>.</li>
+      <li><code>unionAll</code> is not SQL-vs-union. It is the same as <code>union</code>.</li>
+      <li>Tag <code>src</code> on each side <em>before</em> the stack, or you cannot tell which file a row came from.</li>
+    </ul>
+
+    <h2>6. Retrieval</h2>
+    <div id="q1"></div>
+    <div id="q2"></div>
+    <div id="q3"></div>
+
+    <h2>7. Cold write</h2>
+    <div id="drill1"></div>
+
+    <h2>8. Run</h2>
+    <pre><code>cd exercises
+../.venv/bin/python 19_union.py</code></pre>
+    <p>
+      File: <code>exercises/19_union.py</code> ·
+      Peek after try: <code>exercises/solutions/19_union.py</code>
+    </p>
+
+    <div class="source">
+      <strong>Primary source:</strong>
+      <a href="https://spark.apache.org/docs/latest/api/python/reference/pyspark.sql/api/pyspark.sql.DataFrame.unionByName.html">unionByName</a>
+      ·
+      <a href="https://spark.apache.org/docs/latest/api/python/reference/pyspark.sql/api/pyspark.sql.DataFrame.union.html">union</a>
+      ·
+      <a href="https://spark.apache.org/docs/latest/api/python/reference/pyspark.sql/api/pyspark.sql.DataFrame.distinct.html">distinct</a>
+    </div>
+
+    <div class="ask">
+      FAIL? Paste got vs expected. Name the step: union vs unionByName, allowMissingColumns, distinct, or src tag.
+      Ask the agent anything unclear — teacher is here.
+    </div>
+
+    <footer>
+      Prev mix: <a href="0020-datetime-pipeline-mix.html">0020</a>
+      · After PASS: union + pipeline mix (optional)
+    </footer>
+  </div>
+  <script src="../assets/quiz.js"></script>
+  <script>
+    LessonUI.Quiz.mount("#q1", {
+      prompt: "east.union(west) when column order differs…",
+      options: [
+        { text: "Stacks columns by seat position", correct: true, why: "union is positional, like SQL UNION ALL." },
+        { text: "Stacks columns by their names", correct: false, why: "That is unionByName." },
+        { text: "Drops columns that names miss", correct: false, why: "Same-width union keeps every seat." },
+        { text: "Renames west columns to east", correct: false, why: "No rename. Values sit where they sit." },
+      ],
+    });
+    LessonUI.Quiz.mount("#q2", {
+      prompt: "west grew a region column. unionByName without the flag…",
+      options: [
+        { text: "Raises; names do not match", correct: true, why: "allowMissingColumns defaults False since 3.1." },
+        { text: "Fills region with a null", correct: false, why: "Only if allowMissingColumns=True." },
+        { text: "Drops region from both sides", correct: false, why: "It does not silently drop the extra name." },
+        { text: "Keeps region on east rows", correct: false, why: "east has no region to keep." },
+      ],
+    });
+    LessonUI.Quiz.mount("#q3", {
+      prompt: "union of two frames that share one identical row…",
+      options: [
+        { text: "Keeps both copies of the row", correct: true, why: "union / unionByName are UNION ALL. distinct to set." },
+        { text: "Keeps one copy of the row", correct: false, why: "No automatic dedup." },
+        { text: "Keeps neither copy of the row", correct: false, why: "Nothing is dropped." },
+        { text: "Keeps west copy of the row", correct: false, why: "Both sides stay. Order is left then right." },
+      ],
+    });
+    LessonUI.Drill.mount("#drill1", {
+      prompt: "east.unionByName(west_shuf)",
+      accept: [
+        "east.unionByName(west_shuf)",
+        "east.unionByName(west_shuf, allowMissingColumns=False)",
+        "east.unionByName(west_shuf, False)",
+      ],
+      solution: "east.unionByName(west_shuf)",
+    });
+  </script>
+</body>
+</html>

@@ -36,3 +36,4 @@
 - 17 datetime 8/8. ex3 was column (`sold_at` vs `ts`), not the API. Offer datetime+pipeline mix next.
 - Next: 0020 / 18_datetime_pipeline.py. Re-hit ISO parse, ts≠sold_at, datediff(end,start), fill-before-sum.
 - 18 mix 8/8. ex6 first orderBy("order_id") only; rewrote to amount desc, then order_id. Stretch 10b closed.
+- Next stretch: union / unionByName (0021 / 19_union.py). union = position (SQL UNION ALL); work default unionByName + allowMissingColumns.

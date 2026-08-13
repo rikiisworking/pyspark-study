@@ -29,7 +29,8 @@
       <a href="../lessons/0017-window-spec-then-rank.html">0017</a> ·
       <a href="../lessons/0018-datetime.html">0018</a> ·
       <a href="../lessons/0019-iso-parse.html">0019</a> ·
-      <a href="../lessons/0020-datetime-pipeline-mix.html">0020</a>
+      <a href="../lessons/0020-datetime-pipeline-mix.html">0020</a> ·
+      <a href="../lessons/0021-union-by-name.html">0021</a>
     </nav>
     <header>
       <p class="eyebrow">Reference · print-friendly</p>
@@ -304,6 +305,27 @@ date_format(d, "dd-MM-yyyy")
 # mix: parse early, then filter / join / window / write
 .filter(col("sold") > "2026-01-10")   # null sold drops
 try_to_timestamp(col("ts"), lit("…"))  # clock is ts, not sold_at</code></pre>
+
+    <h2>Union</h2>
+    <pre><code># union = SQL UNION ALL = by *position*, no dedup
+east.union(west)                 # same seats only
+# unionAll is an alias of union
+
+# work default: match names
+east.unionByName(west)
+east.unionByName(west, allowMissingColumns=True)  # extra col → null
+
+east.unionByName(west).distinct()   # set, not bag
+east.withColumn("src", lit("east")).unionByName(
+    west.withColumn("src", lit("west"))
+)</code></pre>
+    <p>
+      <a href="https://spark.apache.org/docs/latest/api/python/reference/pyspark.sql/api/pyspark.sql.DataFrame.unionByName.html">unionByName</a>
+      ·
+      <a href="https://spark.apache.org/docs/latest/api/python/reference/pyspark.sql/api/pyspark.sql.DataFrame.union.html">union</a>
+      ·
+      <a href="https://spark.apache.org/docs/latest/api/python/reference/pyspark.sql/api/pyspark.sql.DataFrame.distinct.html">distinct</a>
+    </p>
     <p>
       <a href="https://spark.apache.org/docs/latest/api/python/reference/pyspark.sql/api/pyspark.sql.functions.try_to_date.html">try_to_date</a>
       ·
@@ -335,7 +357,8 @@ try_to_timestamp(col("ts"), lit("…"))  # clock is ts, not sold_at</code></pre>
       <a href="../lessons/0017-window-spec-then-rank.html">0017</a> ·
       <a href="../lessons/0018-datetime.html">0018</a> ·
       <a href="../lessons/0019-iso-parse.html">0019</a> ·
-      <a href="../lessons/0020-datetime-pipeline-mix.html">0020</a>
+      <a href="../lessons/0020-datetime-pipeline-mix.html">0020</a> ·
+      <a href="../lessons/0021-union-by-name.html">0021</a>
     </footer>
   </div>
 </body>
