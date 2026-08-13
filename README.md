@@ -54,6 +54,7 @@ cd exercises
 | 10 | datetime | [0018](lessons/0018-datetime.html) | `17_datetime.py` |
 | 10b | datetime + pipeline mix | [0020](lessons/0020-datetime-pipeline-mix.html) | `18_datetime_pipeline.py` |
 | 11 | union / unionByName | [0021](lessons/0021-union-by-name.html) | `19_union.py` |
+| 11b | union + pipeline mix | [0022](lessons/0022-union-pipeline-mix.html) | `20_union_pipeline.py` |
 
 ## Layout
 

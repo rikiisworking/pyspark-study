@@ -38,3 +38,5 @@
 - 18 mix 8/8. ex6 first orderBy("order_id") only; rewrote to amount desc, then order_id. Stretch 10b closed.
 - Next stretch: union / unionByName (0021 / 19_union.py). union = position (SQL UNION ALL); work default unionByName + allowMissingColumns.
 - 19 union 8/8. No stall. Offer union+pipeline mix next.
+- Next: 0022 / 20_union_pipeline.py. Re-hit unionByName (west shuffled), allowMissing, src-before-stack, fill-before-sum. Window fixture: min id ≠ top amount.
+- 20 mix 8/8. ex3 stall: two `region` cols — rename dim then coalesce. Window amount-desc first try. Stretch 11b closed.

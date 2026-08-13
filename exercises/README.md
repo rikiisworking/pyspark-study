@@ -41,6 +41,7 @@ cd exercises
 | `17_datetime.py` | try_to_date, timestamp, date_trunc, datediff, year/month | [0018](../lessons/0018-datetime.html) |
 | `18_datetime_pipeline.py` | datetime + filter/join/window/I/O mix | [0020 mix](../lessons/0020-datetime-pipeline-mix.html) |
 | `19_union.py` | union (position), unionByName, allowMissingColumns, distinct | [0021](../lessons/0021-union-by-name.html) |
+| `20_union_pipeline.py` | unionByName + filter/join/window/I/O mix | [0022 mix](../lessons/0022-union-pipeline-mix.html) |
 | `solutions/` | reference answers — after a real try | |
 
 Row order does not matter. Column **names and order** do.

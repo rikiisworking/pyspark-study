@@ -49,7 +49,7 @@
 - [date_trunc](https://spark.apache.org/docs/latest/api/python/reference/pyspark.sql/api/pyspark.sql.functions.date_trunc.html) · [datediff](https://spark.apache.org/docs/latest/api/python/reference/pyspark.sql/api/pyspark.sql.functions.datediff.html) · [date_format](https://spark.apache.org/docs/latest/api/python/reference/pyspark.sql/api/pyspark.sql.functions.date_format.html) · [year](https://spark.apache.org/docs/latest/api/python/reference/pyspark.sql/api/pyspark.sql.functions.year.html) · [month](https://spark.apache.org/docs/latest/api/python/reference/pyspark.sql/api/pyspark.sql.functions.month.html)
   Trunc / day-diff (end, start) / format / extract. Use for: lesson 0018 after parse.
 - [unionByName](https://spark.apache.org/docs/latest/api/python/reference/pyspark.sql/api/pyspark.sql.DataFrame.unionByName.html) · [union](https://spark.apache.org/docs/latest/api/python/reference/pyspark.sql/api/pyspark.sql.DataFrame.union.html) · [unionAll](https://spark.apache.org/docs/latest/api/python/reference/pyspark.sql/api/pyspark.sql.DataFrame.unionAll.html) · [distinct](https://spark.apache.org/docs/latest/api/python/reference/pyspark.sql/api/pyspark.sql.DataFrame.distinct.html)
-  Stack frames. union = by position, no dedup (unionAll is an alias). unionByName matches names; allowMissingColumns=True (3.1+) fills holes with null. Use for: lesson 0021.
+  Stack frames. union = by position, no dedup (unionAll is an alias). unionByName matches names; allowMissingColumns=True (3.1+) fills holes with null. Use for: lesson 0021 and mix 0022.
 
 ## Wisdom (Communities)
 

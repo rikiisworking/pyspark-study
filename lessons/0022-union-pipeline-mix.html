@@ -1,0 +1,204 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>0022 · union + pipeline mix</title>
+  <link rel="stylesheet" href="../assets/styles.css" />
+</head>
+<body>
+  <div class="wrap">
+    <nav class="crumbs">
+      <a href="0021-union-by-name.html">← 0021</a> ·
+      <a href="../reference/dataframe-core-syntax.html">Reference</a> ·
+      <a href="../exercises/20_union_pipeline.py">Exercises</a>
+    </nav>
+    <header>
+      <p class="eyebrow">Lesson 0022 · integration (not new API)</p>
+      <h1>Union + pipeline mix</h1>
+      <p class="lede">Stack first — then filter / join / window / write. West columns are shuffled; <a href="0021-union-by-name.html">unionByName</a> is the work call.</p>
+    </header>
+
+    <div class="win">
+      <strong>Win:</strong> Finish <code>20_union_pipeline.py</code> cold-ish. The stack is a step, not a separate world. Re-hit allow-missing, <code>src</code> tag, and amount-desc window.
+    </div>
+
+    <h2>0. Why this exists</h2>
+    <p>
+      You passed isolated union (<a href="0021-union-by-name.html">0021</a>). Storage strength = interleave
+      <code>unionByName</code> with filter, join, fill, groupBy, window, parquet.
+      Same pattern as <a href="0016-sql-pipeline-mix.html">0016</a> / <a href="0020-datetime-pipeline-mix.html">0020</a>.
+      Window fixture: min <code>order_id</code> is <em>not</em> max amount (the 0020 ex6 miss).
+    </p>
+
+    <h2>1. Toolbox (all you need)</h2>
+    <pre><code>from pyspark.sql import Window
+from pyspark.sql.functions import col, coalesce, lit, sum, row_number
+
+# stack — west_shuf seats are swapped; do not union
+east.unionByName(west_shuf)
+east.unionByName(west_extra, allowMissingColumns=True)
+
+# tag *before* the stack
+east.withColumn("src", lit("east")).unionByName(
+    west_shuf.withColumn("src", lit("west"))
+)
+
+# then the pipeline you already know
+.filter(col("status") == "open")
+.join(customers, "cust_id")                    # inner
+.join(dim, "cust_id", "left")
+.na.fill({"amount": 0})
+.distinct()
+Window.partitionBy("name").orderBy(col("amount").desc(), col("order_id"))
+.write.mode("overwrite").parquet(path)</code></pre>
+    <p>
+      Ref: <a href="../reference/dataframe-core-syntax.html">dataframe-core-syntax</a> ·
+      <a href="0021-union-by-name.html">0021</a> ·
+      <a href="0017-window-spec-then-rank.html">0017</a>
+    </p>
+
+    <h2>2. Data for the drills</h2>
+    <pre><code>east(order_id, cust_id, amount, status)
+  1  10  100  open
+  2  20   50  open
+  3  10  200  closed
+  4  30   80  open
+  8  20  null open     ← null amount
+
+west_shuf(amount, order_id, cust_id, status)   # seats swapped
+  90  5  20  open
+  150 6  30  closed
+  80  4  30  open      ← twin of east 4
+
+west_extra(..., region)
+  7  99  90  open  north   ← orphan
+
+customers(cust_id, name, region)
+  10 Alice east
+  20 Bob   null
+  30 Carol east
+  40 Dan   north</code></pre>
+
+    <h2>3. Knowledge → each exercise</h2>
+
+    <h3>ex1 — stack → open</h3>
+    <pre><code>east.unionByName(west_shuf).filter(col("status") == "open")
+# 1, 2, 4, 8 (null amt), 5, and the west twin 4. 3 and 6 closed.</code></pre>
+
+    <h3>ex2 — stack → inner name</h3>
+    <pre><code># all east+west_shuf have a customer. Two Carol 4s. Bob 8 amount null.</code></pre>
+
+    <h3>ex3 — allow missing → left region</h3>
+    <pre><code># west_extra has region; east does not → allowMissingColumns=True
+# customers.region collides — alias it cust_region before join
+# coalesce(stack region, cust_region, "unknown")
+# Bob → unknown; orphan 7 → north (from the extract, not the dim)</code></pre>
+
+    <h3>ex4 — tag → keep west</h3>
+    <pre><code># src on each side *before* unionByName; filter src == "west"
+# (5, west, 90), (6, west, 150), (4, west, 80)</code></pre>
+
+    <h3>ex5 — fill → sum by status</h3>
+    <pre><code># fill amount 0 so row 8 counts
+# open: 100+50+80+0+90+80 = 400; closed: 200+150 = 350</code></pre>
+
+    <h3>ex6 — window top per name</h3>
+    <pre><code># drop null amount, inner join, partitionBy name
+# orderBy amount desc, then order_id — not order_id alone
+# Alice 3/200 (not 1), Bob 5/90 (not 2), Carol 6/150 (not 4)</code></pre>
+
+    <h3>ex7 — stack → parquet</h3>
+    <pre><code># select order_id, amount, status; overwrite parquet; read back
+# twins and null amount stay</code></pre>
+
+    <h3>ex8 — distinct → open → inner</h3>
+    <pre><code># one row 4 after distinct. Open + inner: 1, 2, 4, 8, 5</code></pre>
+
+    <h2>4. Traps (work)</h2>
+    <ul>
+      <li>west_shuf is shuffled. <code>union</code> silently swaps amount into <code>order_id</code>.</li>
+      <li>Tag <code>src</code> before the stack or you cannot filter one extract.</li>
+      <li>Two <code>region</code> columns after join — rename the dim side first.</li>
+      <li>Fill amount before <code>sum</code>. Nulls are skipped.</li>
+      <li>Top-N: <code>orderBy(col("amount").desc(), col("order_id"))</code>. This toy set punishes <code>orderBy("order_id")</code>.</li>
+    </ul>
+
+    <h2>5. Retrieval</h2>
+    <div id="q1"></div>
+    <div id="q2"></div>
+    <div id="q3"></div>
+
+    <h2>6. Cold write</h2>
+    <div id="drill1"></div>
+
+    <h2>7. Run</h2>
+    <pre><code>cd exercises
+../.venv/bin/python 20_union_pipeline.py</code></pre>
+    <p>
+      File: <code>exercises/20_union_pipeline.py</code> ·
+      Peek after try: <code>exercises/solutions/20_union_pipeline.py</code>
+    </p>
+
+    <div class="source">
+      <strong>Primary source:</strong>
+      <a href="https://spark.apache.org/docs/latest/api/python/reference/pyspark.sql/api/pyspark.sql.DataFrame.unionByName.html">unionByName</a>
+      · compose with
+      <a href="https://spark.apache.org/docs/latest/api/python/reference/pyspark.sql/api/pyspark.sql.DataFrame.join.html">join</a>
+      ·
+      <a href="https://spark.apache.org/docs/latest/api/python/reference/pyspark.sql/api/pyspark.sql.Window.html">Window</a>
+    </div>
+
+    <div class="ask">
+      FAIL? Paste got vs expected. Name the step: union vs unionByName, allowMissing, src tag, region name clash, fill-before-sum, or window orderBy.
+      Ask the agent anything unclear — teacher is here.
+    </div>
+
+    <footer>
+      Prev: <a href="0021-union-by-name.html">0021</a>
+      · Unstuck window: <a href="0017-window-spec-then-rank.html">0017</a>
+    </footer>
+  </div>
+  <script src="../assets/quiz.js"></script>
+  <script>
+    LessonUI.Quiz.mount("#q1", {
+      prompt: "Stacked east + shuffled west. Need customer names next.",
+      options: [
+        { text: "Inner join customers on cust_id", correct: true, why: "Stack returns a DF. Join as usual." },
+        { text: "Union again on the names", correct: false, why: "Union stacks rows. Names live on the dim table." },
+        { text: "Distinct then drop cust_id", correct: false, why: "Dropping the key blocks the join." },
+        { text: "Broadcast then ignore names", correct: false, why: "Broadcast is a hint, not a join." },
+      ],
+    });
+    LessonUI.Quiz.mount("#q2", {
+      prompt: "west_extra grew a region column. Stack it with east.",
+      options: [
+        { text: "Stack by name; allow missing cols", correct: true, why: "unionByName(..., allowMissingColumns=True)." },
+        { text: "Stack by seat; allow missing cols", correct: false, why: "union has no allowMissing. Seats also mismatch." },
+        { text: "Stack by name; drop extra cols", correct: false, why: "You need region on row 7." },
+        { text: "Stack by seat; drop extra cols", correct: false, why: "Wrong stack and you lose region." },
+      ],
+    });
+    LessonUI.Quiz.mount("#q3", {
+      prompt: "Top amount per name after the stack. Order the window by…",
+      options: [
+        { text: "Rank by amount then order_id", correct: true, why: "amount desc, then order_id for ties. Min id ≠ max amount here." },
+        { text: "Rank by order_id then amount", correct: false, why: "That is smallest id, not top amount (0020 miss)." },
+        { text: "Rank by name then order_id", correct: false, why: "name is the partition, not the sort." },
+        { text: "Rank by status then order_id", correct: false, why: "status is not the rank key." },
+      ],
+    });
+    LessonUI.Drill.mount("#drill1", {
+      prompt: "east.unionByName(west_shuf).filter status == open",
+      accept: [
+        'east.unionByName(west_shuf).filter(col("status") == "open")',
+        "east.unionByName(west_shuf).filter(col('status') == 'open')",
+        'east.unionByName(west_shuf).filter(col("status")=="open")',
+        "east.unionByName(west_shuf).where(col('status') == 'open')",
+        'east.unionByName(west_shuf).where(col("status") == "open")',
+      ],
+      solution: 'east.unionByName(west_shuf).filter(col("status") == "open")',
+    });
+  </script>
+</body>
+</html>
